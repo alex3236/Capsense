@@ -4,8 +4,8 @@ Repurpose the CapsLock key for switching input methods on Windows.
 
 ## Why?
 
-On Windows, the default shortcuts for switching input languages (like `Shift` and `Win + Space`) can often be confusing
-or inconsistent across different IME (Input Method Editor) setups.
+On Windows, the default shortcuts for switching input languages (such as `Shift` and `Win + Space`)
+can cause confusion about the current input method status.
 
 MacOS solves this by utilizing the often-underused `CapsLock` key as a dedicated toggle for input sources. **Capsense**
 brings this behavior to Windows, allowing you to use a quick tap of the `CapsLock` key to trigger your preferred input
@@ -47,9 +47,16 @@ On first run, a `config.toml` file will be created in the same directory. You ca
 ## License
 
 ```
-Capsense is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+Capsense is free software: you can redistribute it and/or modify 
+it under the terms of the GNU General Public License as published 
+by the Free Software Foundation, either version 3 of the License, 
+or (at your option) any later version.
 
-Capsense is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Capsense is distributed in the hope that it will be useful, 
+but WITHOUT ANY WARRANTY; without even the implied warranty of 
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the 
+GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
+You should have received a copy of the GNU General Public License 
+along with this program. If not, see <https://www.gnu.org/licenses/>.
 ```
