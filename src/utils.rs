@@ -160,13 +160,27 @@ unsafe extern "system" fn window_proc(
     }
 }
 
-pub fn send_msg_to_instance(msg: u32) {
+pub fn send_msg_to_instance(msg: u32) -> bool {
     unsafe {
         let hwnd = FindWindowW(WINDOW_CLASS_NAME.as_ptr(), null_mut());
         if hwnd != 0 {
             PostMessageW(hwnd, msg, 0, 0);
+            true
         } else {
-            println!("No running instance found.");
+            false
+        }
+    }
+}
+
+pub fn get_instance_pid() -> Option<u32> {
+    unsafe {
+        let hwnd = FindWindowW(WINDOW_CLASS_NAME.as_ptr(), null_mut());
+        if hwnd != 0 {
+            let mut pid = 0;
+            windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(hwnd, &mut pid);
+            Some(pid)
+        } else {
+            None
         }
     }
 }

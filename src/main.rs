@@ -56,6 +56,9 @@ struct Args {
     #[arg(long, short = 'r')]
     reload: bool,
 
+    #[arg(long, short = 'S')]
+    status: bool,
+
     #[arg(long, value_enum)]
     startup: Option<StartupAction>,
 }
@@ -82,17 +85,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    // Handle status command
+    if args.status {
+        if let Some(pid) = crate::utils::get_instance_pid() {
+            println!("Capsense running with PID: {}", pid);
+        } else {
+            println!("No running instance found.");
+        }
+        return Ok(());
+    }
+
     // Handle stop command
     if args.stop {
-        send_msg_to_instance(WM_CLOSE);
-        println!("Sent stop signal.");
+        if send_msg_to_instance(WM_CLOSE) {
+            println!("Sent stop signal.");
+        } else {
+            println!("No running instance found.");
+        }
         return Ok(());
     }
 
     // Handle reload command
     if args.reload {
-        send_msg_to_instance(WM_RELOAD_CONFIG);
-        println!("Sent reload signal.");
+        if send_msg_to_instance(WM_RELOAD_CONFIG) {
+            println!("Sent reload signal.");
+        } else {
+            println!("No running instance found.");
+        }
         return Ok(());
     }
 
