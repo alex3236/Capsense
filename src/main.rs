@@ -24,14 +24,18 @@ lazy_static::lazy_static! {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
     pub tap_threshold_ms: u64,
+    pub tap_action: String,
     pub tap_shortcut: Vec<String>, // ["LWIN", "SPACE"]
+    pub layouts: Vec<i32>
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             tap_threshold_ms: 300,
+            tap_action: "switch_layout".to_string(),
             tap_shortcut: vec!["LWIN".to_string(), "SPACE".to_string()],
+            layouts: vec![0x0804, 0x0409]
         }
     }
 }

@@ -36,14 +36,26 @@ The program supports the following command-line arguments:
 
 On first run, a `config.toml` file will be created in the same directory. You can customize the following:
 
-- `tap_threshold_ms`: The maximum duration (in milliseconds) for a `CapsLock` press to be considered a "tap".
-- `tap_shortcut`: The shortcut to trigger (e.g., `["LWIN", "SPACE"]`). Supported keys are:
+- `tap_threshold_ms`: The maximum duration (in milliseconds) for a `CapsLock` press to be considered a "tap". `300` ms
+  by default.
+- `tap_action`: The action to perform on a tap. Supported actions are:
+  - `shortcut`: Trigger a keyboard shortcut (defined by `tap_shortcut`).
+  - `switch_layout`: (Default) Rotate through input layouts.
+- `tap_shortcut`: The shortcut to trigger (`["LWIN", "SPACE"]` by default). Supported keys are:
     - `LWIN` (or `WIN`)
     - `SPACE`
     - `LCONTROL` (or `CTRL`)
     - `LSHIFT` (or `SHIFT`)
     - `LMENU` (or `ALT`)
     - `CAPSLOCK`
+- `layouts`: A list of input layout IDs to rotate through when `tap_action` is set to `switch_layout`.
+  - Default: `[0x0804, 0x0409]` (`zh-CN` and `en-GB`).
+  -
+  See [Microsoft's documentation](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/70feba9f-294e-491e-b6eb-56532684c37f)
+  for more layout IDs. Other common ones are:
+    - `0x0404`: Traditional Chinese
+    - `0x0411`: Japanese
+    - `0x0412`: Korean
 
 ## License
 

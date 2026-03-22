@@ -9,10 +9,9 @@ use windows_sys::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_CAPITAL;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, DispatchMessageW, GetMessageW,
-    SetWindowsHookExW, TranslateMessage, UnhookWindowsHookEx, HC_ACTION, HHOOK,
-    KBDLLHOOKSTRUCT, LLKHF_INJECTED, MSG, WH_KEYBOARD_LL, WM_KEYDOWN,
-    WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_USER,
+    CallNextHookEx, DispatchMessageW, GetMessageW, SetWindowsHookExW, TranslateMessage, UnhookWindowsHookEx,
+    HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, LLKHF_INJECTED, MSG, WH_KEYBOARD_LL,
+    WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_USER,
 };
 
 use crate::CONFIG;
@@ -143,7 +142,10 @@ unsafe extern "system" fn low_level_keyboard_proc(
         let elapsed = start.take().map(|t| t.elapsed()).unwrap_or_default();
 
         if !long_fired && elapsed < threshold {
-            execute_custom_shortcut(&config.tap_shortcut);
+            match config.tap_action.as_str() {
+                "switch_layout" => rotate_layout(&config.layouts),
+                _ => execute_custom_shortcut(&config.tap_shortcut),
+            }
         }
         return 1;
     }

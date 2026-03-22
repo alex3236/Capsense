@@ -8,12 +8,13 @@ use windows_sys::Win32::System::Registry::{
     REG_SZ,
 };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CAPITAL, VK_CONTROL, VK_LWIN,
-    VK_MENU, VK_SHIFT, VK_SPACE,
+    GetKeyboardLayout, SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CAPITAL,
+    VK_CONTROL, VK_LWIN, VK_MENU, VK_SHIFT, VK_SPACE,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetMessageW, PostMessageW, RegisterClassW,
-    MSG, WM_CLOSE, WNDCLASSW,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetForegroundWindow,
+    GetMessageW, GetWindowThreadProcessId, PostMessageW, RegisterClassW, MSG, WM_CLOSE,
+    WM_INPUTLANGCHANGEREQUEST, WNDCLASSW,
 };
 
 use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
@@ -88,6 +89,55 @@ pub(crate) fn key_up(vk: u16) -> INPUT {
             dwExtraInfo: 0,
         };
         input
+    }
+}
+
+// Keyboard layout management
+
+pub(crate) unsafe fn set_keyboard_layout(hkl: usize) {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd == 0 {
+            return;
+        }
+
+        PostMessageW(
+            hwnd,
+            WM_INPUTLANGCHANGEREQUEST,
+            0, // Current thread's window
+            hkl as isize,
+        );
+    }
+}
+
+pub(crate) unsafe fn get_current_hkl() -> usize {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        let thread_id = GetWindowThreadProcessId(hwnd, null_mut());
+        let hkl = GetKeyboardLayout(thread_id);
+        hkl as usize
+    }
+}
+
+pub(crate) fn rotate_layout(layouts: &[i32]) {
+    if layouts.is_empty() {
+        return;
+    }
+
+    unsafe {
+        let current_hkl = get_current_hkl() as i32;
+
+        let current_index = layouts.iter().position(|&l| {
+            // Compare low 16 bits (Language ID)
+            (l & 0xFFFF) == (current_hkl & 0xFFFF)
+        });
+
+        let next_index = match current_index {
+            Some(i) => (i + 1) % layouts.len(),
+            None => 0,
+        };
+
+        set_keyboard_layout(layouts[next_index] as usize);
     }
 }
 
