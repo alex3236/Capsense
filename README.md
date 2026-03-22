@@ -27,9 +27,10 @@ Simply run the executable to start monitoring `CapsLock` events.
 
 The program supports the following command-line arguments:
 
+- `-s, --stop`: Stop running instance of Capsense.
+- `-r, --reload`: Reload the configuration from `config.toml`.
+- `-S, --status`: Check if a Capsense instance is running and show its PID.
 - `--startup <enable|disable>`: Enable or disable the program starting automatically with Windows.
-- `--stop`: Stop running instance of Capsense.
-- `--reload`: Reload the configuration from `config.toml`.
 
 ## Configuration
 
