@@ -23,6 +23,13 @@ switching shortcut (defaulting to `Win + Space`).
 
 Simply run the executable to start monitoring `CapsLock` events.
 
+If you double click the executable, there will be no window or console, but the program will be running in the
+background.
+
+We recommend setting your IMEs to disable the functionality of the `Shift` key for switching IME states to get the best
+experience, as it can confuse you. Instead, you use `CapsLock` to switch keyboard layouts, Use `Win+Space` to switch the
+primary IME of the current keyboard layout.
+
 ### Arguments
 
 The program supports the following command-line arguments:
