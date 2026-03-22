@@ -8,8 +8,8 @@ On Windows, the default shortcuts for switching input languages (such as `Shift`
 can cause confusion about the current input method status.
 
 MacOS solves this by utilizing the often-underused `CapsLock` key as a dedicated toggle for input sources. **Capsense**
-brings this behavior to Windows, allowing you to use a quick tap of the `CapsLock` key to trigger your preferred input
-switching shortcut (defaulting to `Win + Space`).
+brings this behavior to Windows, allowing you to use a quick tap of the `CapsLock` key to trigger IME switching, while
+still retaining the ability to use `CapsLock` for its original purpose.
 
 ## Features
 
