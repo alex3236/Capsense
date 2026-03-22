@@ -1,6 +1,9 @@
 [package]
 name = "Capsense"
-version = "0.1.0"
+authors = ["Alex3236"]
+license = "GPL-3"
+homepage = "https://github.com/Alex3236/Capsense"
+version = "0.1.2"
 edition = "2024"
 
 [dependencies]

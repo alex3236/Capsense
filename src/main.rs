@@ -50,10 +50,10 @@ enum StartupAction {
 #[derive(Parser, Debug)]
 #[command(author, version, about = "CapsLock Hook Utility")]
 struct Args {
-    #[arg(long)]
+    #[arg(long, short = 's')]
     stop: bool,
 
-    #[arg(long)]
+    #[arg(long, short = 'r')]
     reload: bool,
 
     #[arg(long, value_enum)]

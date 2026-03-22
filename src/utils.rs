@@ -4,19 +4,19 @@ use std::ptr::null_mut;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Registry::{
-    HKEY_CURRENT_USER, KEY_SET_VALUE, REG_SZ, RegCloseKey, RegDeleteValueW, RegOpenKeyExW,
-    RegSetValueExW,
+    RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY_CURRENT_USER, KEY_SET_VALUE,
+    REG_SZ,
 };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput, VK_CAPITAL, VK_CONTROL, VK_LWIN,
+    SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CAPITAL, VK_CONTROL, VK_LWIN,
     VK_MENU, VK_SHIFT, VK_SPACE,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetMessageW, MSG, PostMessageW,
-    RegisterClassW, WM_CLOSE, WNDCLASSW,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetMessageW, PostMessageW, RegisterClassW,
+    MSG, WM_CLOSE, WNDCLASSW,
 };
 
-use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
 
 pub(crate) unsafe fn attach_console() {
     unsafe {
@@ -179,7 +179,7 @@ pub fn encode_wide(s: &str) -> Vec<u16> {
 
 pub fn set_startup(enable: bool) -> Result<(), String> {
     let run_key = encode_wide("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
-    let app_name = encode_wide("CapsLockR");
+    let app_name = encode_wide("Capsense");
 
     unsafe {
         let mut hkey = 0 as _;
