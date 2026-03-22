@@ -63,6 +63,9 @@ struct Args {
     #[arg(long, short = 'S')]
     status: bool,
 
+    #[arg(long, short = 'd')]
+    daemon: bool,
+
     #[arg(long, value_enum)]
     startup: Option<StartupAction>,
 }
@@ -73,6 +76,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let args = Args::parse();
+
+    // Handle daemonization
+    if args.daemon {
+        let exe_path = std::env::current_exe()?;
+        let mut command = std::process::Command::new(exe_path);
+
+        // Strip the daemon flag to avoid infinite recursion
+        for arg in std::env::args().skip(1) {
+            if arg != "--daemon" && arg != "-d" {
+                command.arg(arg);
+            }
+        }
+
+        command.spawn()?;
+        println!("Capsense started in background.");
+        return Ok(());
+    }
 
     // Handle startup command
     if let Some(action) = args.startup {
