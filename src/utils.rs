@@ -1,6 +1,7 @@
 use crate::hook::{WINDOW_CLASS_NAME, WM_RELOAD_CONFIG};
 use crate::load_config;
 use std::ptr::null_mut;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::thread;
 use std::time::Duration;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
@@ -28,6 +29,7 @@ use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
 const IME_MODE_SYNC_DELAY_MS: u64 = 50;
 const CHINESE_IME_CONVERSION_MODE: isize = (IME_CMODE_CHINESE | IME_CMODE_SYMBOL) as isize;
 const PRIMARY_LANGUAGE_ID_MASK: u16 = 0x03ff;
+static LATEST_IME_SYNC_REQUEST_ID: AtomicU32 = AtomicU32::new(0);
 
 pub(crate) unsafe fn attach_console() {
     unsafe {
@@ -149,21 +151,33 @@ pub(crate) fn rotate_layout(layouts: &[i32], no_en: bool) {
 
         set_keyboard_layout(layouts[next_index] as usize);
         if no_en {
-            force_chinese_ime_mode_if_needed();
+            let hwnd = GetForegroundWindow();
+            schedule_chinese_ime_mode_sync(hwnd, true);
         }
     }
 }
 
-fn force_chinese_ime_mode_if_needed() {
-    let hwnd = unsafe { GetForegroundWindow() };
+pub(crate) fn schedule_chinese_ime_mode_sync(hwnd: HWND, require_same_foreground: bool) {
     if hwnd == 0 {
         return;
     }
 
+    let request_id = LATEST_IME_SYNC_REQUEST_ID
+        .fetch_add(1, Ordering::SeqCst)
+        .wrapping_add(1);
+
     thread::spawn(move || {
         thread::sleep(Duration::from_millis(IME_MODE_SYNC_DELAY_MS));
 
+        if LATEST_IME_SYNC_REQUEST_ID.load(Ordering::SeqCst) != request_id {
+            return;
+        }
+
         unsafe {
+            if require_same_foreground && GetForegroundWindow() != hwnd {
+                return;
+            }
+
             let current_hkl = get_keyboard_layout_for_window(hwnd);
             if !is_chinese_ime(current_hkl) {
                 return;

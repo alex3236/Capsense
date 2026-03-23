@@ -3,18 +3,19 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::CONFIG;
 use crate::utils::*;
 
 use windows_sys::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_CAPITAL;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, DispatchMessageW, GetMessageW, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT,
-    LLKHF_INJECTED, MSG, SetWindowsHookExW, TranslateMessage, UnhookWindowsHookEx, WH_KEYBOARD_LL,
-    WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_USER,
+    CallNextHookEx, DispatchMessageW, EVENT_OBJECT_FOCUS, GetForegroundWindow, GetMessageW,
+    HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, LLKHF_INJECTED, MSG, SetWindowsHookExW, TranslateMessage,
+    UnhookWindowsHookEx, WH_KEYBOARD_LL, WH_MOUSE_LL, WINEVENT_OUTOFCONTEXT, WM_KEYDOWN, WM_KEYUP,
+    WM_LBUTTONUP, WM_MBUTTONUP, WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_USER, WM_XBUTTONUP,
 };
-
-use crate::CONFIG;
 
 // Custom messages
 pub const WM_RELOAD_CONFIG: u32 = WM_USER + 1;
@@ -25,6 +26,8 @@ lazy_static::lazy_static! {
 
 // Global states
 static mut HOOK_HANDLE: HHOOK = 0;
+static mut FOCUS_HOOK_HANDLE: HWINEVENTHOOK = 0;
+static mut MOUSE_HOOK_HANDLE: HHOOK = 0;
 static CAPS_IS_DOWN: AtomicBool = AtomicBool::new(false);
 static LONG_ACTION_FIRED: AtomicBool = AtomicBool::new(false);
 static IGNORE_INJECTED_CAPS_EVENTS: AtomicU32 = AtomicU32::new(0);
@@ -47,6 +50,28 @@ pub fn run_hook_loop() -> Result<(), Box<dyn std::error::Error>> {
         if HOOK_HANDLE == 0 {
             return Err("SetWindowsHookExW failed".into());
         }
+
+        MOUSE_HOOK_HANDLE =
+            SetWindowsHookExW(WH_MOUSE_LL, Some(low_level_mouse_proc), h_instance, 0);
+        if MOUSE_HOOK_HANDLE == 0 {
+            UnhookWindowsHookEx(HOOK_HANDLE);
+            return Err("SetWindowsHookExW for mouse failed".into());
+        }
+
+        FOCUS_HOOK_HANDLE = SetWinEventHook(
+            EVENT_OBJECT_FOCUS,
+            EVENT_OBJECT_FOCUS,
+            0,
+            Some(focus_event_proc),
+            0,
+            0,
+            WINEVENT_OUTOFCONTEXT,
+        );
+        if FOCUS_HOOK_HANDLE == 0 {
+            UnhookWindowsHookEx(MOUSE_HOOK_HANDLE);
+            UnhookWindowsHookEx(HOOK_HANDLE);
+            return Err("SetWinEventHook failed".into());
+        }
     }
 
     let mut msg = MSG {
@@ -63,10 +88,64 @@ pub fn run_hook_loop() -> Result<(), Box<dyn std::error::Error>> {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
+        UnhookWinEvent(FOCUS_HOOK_HANDLE);
+        UnhookWindowsHookEx(MOUSE_HOOK_HANDLE);
         UnhookWindowsHookEx(HOOK_HANDLE);
     }
 
     Ok(())
+}
+
+unsafe extern "system" fn focus_event_proc(
+    _hook: HWINEVENTHOOK,
+    _event: u32,
+    hwnd: isize,
+    _id_object: i32,
+    _id_child: i32,
+    _id_event_thread: u32,
+    _event_time: u32,
+) {
+    if hwnd == 0 {
+        return;
+    }
+
+    let config_guard = CONFIG.read().unwrap();
+    let Some(config) = config_guard.as_ref() else {
+        return;
+    };
+
+    if !config.no_en {
+        return;
+    }
+
+    schedule_chinese_ime_mode_sync(hwnd, false);
+}
+
+unsafe extern "system" fn low_level_mouse_proc(
+    code: i32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
+    if code != HC_ACTION as i32 {
+        return unsafe { CallNextHookEx(MOUSE_HOOK_HANDLE, code, wparam, lparam) };
+    }
+
+    let msg = wparam as u32;
+    if matches!(
+        msg,
+        WM_LBUTTONUP | WM_RBUTTONUP | WM_MBUTTONUP | WM_XBUTTONUP
+    ) && no_en_enabled()
+    {
+        let hwnd = unsafe { GetForegroundWindow() };
+        schedule_chinese_ime_mode_sync(hwnd, true);
+    }
+
+    unsafe { CallNextHookEx(MOUSE_HOOK_HANDLE, code, wparam, lparam) }
+}
+
+fn no_en_enabled() -> bool {
+    let config_guard = CONFIG.read().unwrap();
+    matches!(config_guard.as_ref(), Some(config) if config.no_en)
 }
 
 unsafe extern "system" fn low_level_keyboard_proc(
