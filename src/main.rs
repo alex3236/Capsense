@@ -12,21 +12,25 @@ use windows_sys::Win32::UI::WindowsAndMessaging::WM_CLOSE;
 mod hook;
 pub mod utils;
 
-use crate::hook::{run_hook_loop, WM_RELOAD_CONFIG};
+use crate::hook::{WM_RELOAD_CONFIG, run_hook_loop};
 use crate::utils::{attach_console, encode_wide, send_msg_to_instance, set_startup};
 
 lazy_static::lazy_static! {
     static ref MUTEX_NAME: Vec<u16> = encode_wide("CapsCustomHookMutex");
 }
 
+const CONFIG_PATH: &str = "config.toml";
+
 // Configuration
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(default)]
 pub struct Config {
     pub tap_threshold_ms: u64,
     pub tap_action: String,
     pub tap_shortcut: Vec<String>, // ["LWIN", "SPACE"]
-    pub layouts: Vec<i32>
+    pub layouts: Vec<i32>,
+    pub no_en: bool,
 }
 
 impl Default for Config {
@@ -35,7 +39,8 @@ impl Default for Config {
             tap_threshold_ms: 300,
             tap_action: "switch_layout".to_string(),
             tap_shortcut: vec!["LWIN".to_string(), "SPACE".to_string()],
-            layouts: vec![0x0804, 0x0409]
+            layouts: vec![0x0804, 0x0409],
+            no_en: true,
         }
     }
 }
@@ -46,7 +51,7 @@ pub static CONFIG: RwLock<Option<Config>> = RwLock::new(None);
 // CLI Arguments
 
 #[derive(clap::ValueEnum, Clone, Debug)]
-enum StartupAction {
+enum ToggleAction {
     Enable,
     Disable,
 }
@@ -67,7 +72,10 @@ struct Args {
     daemon: bool,
 
     #[arg(long, value_enum)]
-    startup: Option<StartupAction>,
+    startup: Option<ToggleAction>,
+
+    #[arg(long, value_enum)]
+    no_en: Option<ToggleAction>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -97,15 +105,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Handle startup command
     if let Some(action) = args.startup {
         match action {
-            StartupAction::Enable => {
+            ToggleAction::Enable => {
                 set_startup(true)?;
                 println!("Capsense Will now start on system startup.");
             }
-            StartupAction::Disable => {
+            ToggleAction::Disable => {
                 set_startup(false)?;
                 println!("Capsense Will no longer start on system startup.");
             }
         }
+        return Ok(());
+    }
+
+    if let Some(action) = args.no_en {
+        let enabled = matches!(action, ToggleAction::Enable);
+        update_no_en_setting(enabled)?;
         return Ok(());
     }
 
@@ -160,15 +174,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub fn load_config() {
-    let path = "config.toml";
-    let config = if let Ok(content) = fs::read_to_string(path) {
+    let config = if let Ok(content) = fs::read_to_string(CONFIG_PATH) {
         toml::from_str(&content).unwrap_or_else(|_| Config::default())
     } else {
         let default = Config::default();
-        let _ = fs::write(path, toml::to_string(&default).unwrap());
+        let _ = fs::write(CONFIG_PATH, toml::to_string(&default).unwrap());
         default
     };
     let mut global_conf = CONFIG.write().unwrap();
     *global_conf = Some(config);
     println!("Config loaded/reloaded.");
+}
+
+fn read_config_from_disk() -> Config {
+    fs::read_to_string(CONFIG_PATH)
+        .ok()
+        .and_then(|content| toml::from_str(&content).ok())
+        .unwrap_or_default()
+}
+
+fn write_config_to_disk(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    fs::write(CONFIG_PATH, toml::to_string(config)?)?;
+    Ok(())
+}
+
+fn update_no_en_setting(enabled: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let mut config = read_config_from_disk();
+    config.no_en = enabled;
+    write_config_to_disk(&config)?;
+
+    if send_msg_to_instance(WM_RELOAD_CONFIG) {
+        println!("No-English mode updated and reloaded.");
+    } else {
+        println!("No-English mode updated.");
+    }
+
+    Ok(())
 }

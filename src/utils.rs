@@ -1,23 +1,33 @@
 use crate::hook::{WINDOW_CLASS_NAME, WM_RELOAD_CONFIG};
 use crate::load_config;
 use std::ptr::null_mut;
+use std::thread;
+use std::time::Duration;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Registry::{
-    RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY_CURRENT_USER, KEY_SET_VALUE,
-    REG_SZ,
+    HKEY_CURRENT_USER, KEY_SET_VALUE, REG_SZ, RegCloseKey, RegDeleteValueW, RegOpenKeyExW,
+    RegSetValueExW,
+};
+use windows_sys::Win32::System::SystemServices::LANG_CHINESE;
+use windows_sys::Win32::UI::Input::Ime::{
+    IMC_SETCONVERSIONMODE, IME_CMODE_CHINESE, IME_CMODE_SYMBOL, ImmGetDefaultIMEWnd, ImmIsIME,
 };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyboardLayout, SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CAPITAL,
+    GetKeyboardLayout, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput, VK_CAPITAL,
     VK_CONTROL, VK_LWIN, VK_MENU, VK_SHIFT, VK_SPACE,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetForegroundWindow,
-    GetMessageW, GetWindowThreadProcessId, PostMessageW, RegisterClassW, MSG, WM_CLOSE,
-    WM_INPUTLANGCHANGEREQUEST, WNDCLASSW,
+    GetMessageW, GetWindowThreadProcessId, MSG, PostMessageW, RegisterClassW, SendMessageW,
+    WM_CLOSE, WM_IME_CONTROL, WM_INPUTLANGCHANGEREQUEST, WNDCLASSW,
 };
 
-use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+
+const IME_MODE_SYNC_DELAY_MS: u64 = 50;
+const CHINESE_IME_CONVERSION_MODE: isize = (IME_CMODE_CHINESE | IME_CMODE_SYMBOL) as isize;
+const PRIMARY_LANGUAGE_ID_MASK: u16 = 0x03ff;
 
 pub(crate) unsafe fn attach_console() {
     unsafe {
@@ -119,7 +129,7 @@ pub(crate) unsafe fn get_current_hkl() -> usize {
     }
 }
 
-pub(crate) fn rotate_layout(layouts: &[i32]) {
+pub(crate) fn rotate_layout(layouts: &[i32], no_en: bool) {
     if layouts.is_empty() {
         return;
     }
@@ -138,7 +148,64 @@ pub(crate) fn rotate_layout(layouts: &[i32]) {
         };
 
         set_keyboard_layout(layouts[next_index] as usize);
+        if no_en {
+            force_chinese_ime_mode_if_needed();
+        }
     }
+}
+
+fn force_chinese_ime_mode_if_needed() {
+    let hwnd = unsafe { GetForegroundWindow() };
+    if hwnd == 0 {
+        return;
+    }
+
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(IME_MODE_SYNC_DELAY_MS));
+
+        unsafe {
+            let current_hkl = get_keyboard_layout_for_window(hwnd);
+            if !is_chinese_ime(current_hkl) {
+                return;
+            }
+
+            let ime_hwnd = ImmGetDefaultIMEWnd(hwnd);
+            if ime_hwnd == 0 {
+                return;
+            }
+
+            SendMessageW(
+                ime_hwnd,
+                WM_IME_CONTROL,
+                IMC_SETCONVERSIONMODE as usize,
+                CHINESE_IME_CONVERSION_MODE,
+            );
+        }
+    });
+}
+
+unsafe fn get_keyboard_layout_for_window(hwnd: HWND) -> usize {
+    unsafe {
+        let thread_id = GetWindowThreadProcessId(hwnd, null_mut());
+        if thread_id == 0 {
+            return 0;
+        }
+        GetKeyboardLayout(thread_id) as usize
+    }
+}
+
+fn is_chinese_ime(hkl: usize) -> bool {
+    if hkl == 0 {
+        return false;
+    }
+
+    let language_id = (hkl & 0xFFFF) as u16;
+    primary_language_id(language_id) == LANG_CHINESE as u16
+        && unsafe { ImmIsIME(hkl as isize) != 0 }
+}
+
+fn primary_language_id(language_id: u16) -> u16 {
+    language_id & PRIMARY_LANGUAGE_ID_MASK
 }
 
 // IPC via hidden window
