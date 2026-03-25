@@ -61,9 +61,7 @@ On first run, a `config.toml` file will be created in the same directory. You ca
     - `CAPSLOCK`
 - `layouts`: A list of input layout IDs to rotate through when `tap_action` is set to `switch_layout`.
   - Default: `[0x0804, 0x0409]` (`zh-CN` and `en-GB`).
-  -
-  See [Microsoft's documentation](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/70feba9f-294e-491e-b6eb-56532684c37f)
-  for more layout IDs. Other common ones are:
+  - See [Microsoft's documentation](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/70feba9f-294e-491e-b6eb-56532684c37f) for more layout IDs. Other common ones are:
     - `0x0404`: Traditional Chinese
     - `0x0411`: Japanese
     - `0x0412`: Korean
