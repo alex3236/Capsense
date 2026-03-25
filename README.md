@@ -1,3 +1,7 @@
+<img height="200" alt="image" src="https://github.com/user-attachments/assets/c324645d-683c-4cc6-b744-60d8b6bbfc58" />
+
+**English** | [`中文`](README_CN.md)
+
 # Capsense
 
 Repurpose the CapsLock key for switching input methods on Windows.
@@ -14,8 +18,7 @@ still retaining the ability to use `CapsLock` for its original purpose.
 ## Features
 
 - Use a short tap of `CapsLock` to switch input methods.
-- Long press (or toggling via other means) still allows you to use CapsLock for its original purpose if needed (
-  depending on your configuration).
+- Long press to use CapsLock for its original purpose.
 - Runs efficiently in the background with minimal resource usage.
 - Easily change the tap threshold and the shortcut triggered.
 
@@ -36,7 +39,7 @@ The program supports the following command-line arguments:
 
 - `-d, --daemon`: Start Capsense in the background.
 - `-s, --stop`: Stop running instance of Capsense.
-- `-r, --reload`: Reload the configuration from `config.toml`.
+- `-r, --reload`: Reload the configuration from `config.toml` for the running instance.
 - `-S, --status`: Check if a Capsense instance is running and show its PID.
 - `--startup <enable|disable>`: Enable or disable the program starting automatically with Windows.
 
