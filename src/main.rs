@@ -12,8 +12,10 @@ use windows_sys::Win32::UI::WindowsAndMessaging::WM_CLOSE;
 mod hook;
 pub mod utils;
 
-use crate::hook::{WM_RELOAD_CONFIG, run_hook_loop};
-use crate::utils::{attach_console, encode_wide, send_msg_to_instance, set_startup};
+use crate::hook::{run_hook_loop, WM_RELOAD_CONFIG};
+use crate::utils::{
+    attach_console, encode_wide, send_msg_to_instance, set_startup, summon_alert_window,
+};
 
 lazy_static::lazy_static! {
     static ref MUTEX_NAME: Vec<u16> = encode_wide("CapsCustomHookMutex");
@@ -73,9 +75,6 @@ struct Args {
 
     #[arg(long, value_enum)]
     startup: Option<ToggleAction>,
-
-    #[arg(long, value_enum)]
-    no_en: Option<ToggleAction>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -114,12 +113,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Capsense Will no longer start on system startup.");
             }
         }
-        return Ok(());
-    }
-
-    if let Some(action) = args.no_en {
-        let enabled = matches!(action, ToggleAction::Enable);
-        update_no_en_setting(enabled)?;
         return Ok(());
     }
 
@@ -179,35 +172,15 @@ pub fn load_config() {
     } else {
         let default = Config::default();
         let _ = fs::write(CONFIG_PATH, toml::to_string(&default).unwrap());
+        summon_alert_window(
+            "Capsense\n",
+            "Capsense is in no-English mode by default, \
+            which prevent your Chinese IME from entering English mode after layout or focus changes.\n\
+            You can change this setting in the configuration file.",
+        );
         default
     };
     let mut global_conf = CONFIG.write().unwrap();
     *global_conf = Some(config);
     println!("Config loaded/reloaded.");
-}
-
-fn read_config_from_disk() -> Config {
-    fs::read_to_string(CONFIG_PATH)
-        .ok()
-        .and_then(|content| toml::from_str(&content).ok())
-        .unwrap_or_default()
-}
-
-fn write_config_to_disk(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
-    fs::write(CONFIG_PATH, toml::to_string(config)?)?;
-    Ok(())
-}
-
-fn update_no_en_setting(enabled: bool) -> Result<(), Box<dyn std::error::Error>> {
-    let mut config = read_config_from_disk();
-    config.no_en = enabled;
-    write_config_to_disk(&config)?;
-
-    if send_msg_to_instance(WM_RELOAD_CONFIG) {
-        println!("No-English mode updated and reloaded.");
-    } else {
-        println!("No-English mode updated.");
-    }
-
-    Ok(())
 }

@@ -39,7 +39,6 @@ The program supports the following command-line arguments:
 - `-r, --reload`: Reload the configuration from `config.toml`.
 - `-S, --status`: Check if a Capsense instance is running and show its PID.
 - `--startup <enable|disable>`: Enable or disable the program starting automatically with Windows.
-- `--no-en <enable|disable>`: Enable or disable forcing Chinese IMEs back to Chinese mode after layout or focus changes. This updates `config.toml` and reloads the running instance if one exists.
 
 ## Configuration
 
@@ -65,7 +64,8 @@ On first run, a `config.toml` file will be created in the same directory. You ca
     - `0x0404`: Traditional Chinese
     - `0x0411`: Japanese
     - `0x0412`: Korean
-- `no_en`: When enabled, Capsense will force Chinese IMEs back to Chinese mode after layout or focus changes instead of leaving them in English mode. `true` by default.
+- `no_en`: When enabled, Capsense prevent your Chinese IMEs from entering English mode after layout or focus changes.
+  `true` by default.
 
 ## License
 

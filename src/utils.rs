@@ -1,5 +1,7 @@
 use crate::hook::{WINDOW_CLASS_NAME, WM_RELOAD_CONFIG};
 use crate::load_config;
+use std::ffi::OsStr;
+use std::os::windows::ffi::OsStrExt;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::thread;
@@ -7,24 +9,26 @@ use std::time::Duration;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Registry::{
-    HKEY_CURRENT_USER, KEY_SET_VALUE, REG_SZ, RegCloseKey, RegDeleteValueW, RegOpenKeyExW,
-    RegSetValueExW,
+    RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY_CURRENT_USER, KEY_SET_VALUE,
+    REG_SZ,
 };
 use windows_sys::Win32::System::SystemServices::LANG_CHINESE;
 use windows_sys::Win32::UI::Input::Ime::{
-    IMC_SETCONVERSIONMODE, IME_CMODE_CHINESE, IME_CMODE_SYMBOL, ImmGetDefaultIMEWnd, ImmIsIME,
+    ImmGetDefaultIMEWnd, ImmIsIME, IMC_SETCONVERSIONMODE, IME_CMODE_CHINESE, IME_CMODE_SYMBOL,
 };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyboardLayout, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput, VK_CAPITAL,
+    GetKeyboardLayout, SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CAPITAL,
     VK_CONTROL, VK_LWIN, VK_MENU, VK_SHIFT, VK_SPACE,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetForegroundWindow,
-    GetMessageW, GetWindowThreadProcessId, MSG, PostMessageW, RegisterClassW, SendMessageW,
+    GetMessageW, GetWindowThreadProcessId, PostMessageW, RegisterClassW, SendMessageW, MSG,
     WM_CLOSE, WM_IME_CONTROL, WM_INPUTLANGCHANGEREQUEST, WNDCLASSW,
 };
 
-use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+
+use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
 
 const IME_MODE_SYNC_DELAY_MS: u64 = 50;
 const CHINESE_IME_CONVERSION_MODE: isize = (IME_CMODE_CHINESE | IME_CMODE_SYMBOL) as isize;
@@ -369,4 +373,25 @@ pub fn set_startup(enable: bool) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+pub fn summon_alert_window(title: &str, message: &str) {
+    let title_w = to_wide(title);
+    let message_w = to_wide(message);
+
+    unsafe {
+        MessageBoxW(
+            0,
+            message_w.as_ptr(),
+            title_w.as_ptr(),
+            MB_OK | MB_ICONINFORMATION,
+        );
+    }
+}
+
+fn to_wide(s: &str) -> Vec<u16> {
+    OsStr::new(s)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
 }
