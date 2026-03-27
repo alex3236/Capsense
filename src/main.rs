@@ -8,9 +8,11 @@ use windows_sys::Win32::UI::WindowsAndMessaging::WM_CLOSE;
 
 pub mod config;
 pub mod hook;
+pub mod i18n;
 pub mod utils;
 pub mod window;
 
+use crate::i18n::get_i18n;
 use crate::window::create_alert_window;
 use config::load_config;
 use hook::{run_hook_loop, WM_RELOAD_CONFIG};
@@ -87,11 +89,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         match action {
             ToggleAction::Enable => {
                 set_startup(true)?;
-                println!("Capsense Will now start on user login.");
+                println!("{}", get_i18n().start_on_login);
             }
             ToggleAction::Disable => {
                 set_startup(false)?;
-                println!("Capsense Will no longer start on user login.");
+                println!("{}", get_i18n().no_longer_start_on_login);
             }
         }
         return Ok(());
@@ -100,9 +102,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Handle status command
     if args.status {
         if let Some(pid) = utils::get_instance_pid() {
-            println!("Capsense running with PID: {}", pid);
+            println!("{}", get_i18n().running_pid.replace("{}", &pid.to_string()));
         } else {
-            println!("No running instance found.");
+            println!("{}", get_i18n().no_running_instance);
         }
         return Ok(());
     }
@@ -110,9 +112,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Handle stop command
     if args.stop {
         if send_msg_to_instance(WM_CLOSE) {
-            println!("Sent stop signal.");
+            println!("{}", get_i18n().stop_signal_sent);
         } else {
-            println!("No running instance found.");
+            println!("{}", get_i18n().no_running_instance);
         }
         return Ok(());
     }
@@ -120,9 +122,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Handle reload command
     if args.reload {
         if send_msg_to_instance(WM_RELOAD_CONFIG) {
-            println!("Sent reload signal.");
+            println!("{}", get_i18n().reload_signal_sent);
         } else {
-            println!("No running instance found.");
+            println!("{}", get_i18n().no_running_instance);
         }
         return Ok(());
     }
@@ -139,7 +141,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
 
-            eprintln!("Another instance is already running. Use --stop or --reload.");
+            eprintln!("{}", get_i18n().already_running);
             return Ok(());
         }
     }
@@ -157,7 +159,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         command.spawn()?;
-        println!("Capsense started in background.");
+        println!("{}", get_i18n().background_started_cli);
         return Ok(());
     }
 
@@ -166,12 +168,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Run hook loop
     if display_gui && !args.headless {
-        create_alert_window(
-            "Capsense started in background.\n\
-            Run again to show control panel or use CLI commands to control it.",
-        );
+        create_alert_window(get_i18n().background_started);
     }
-    println!("Started. Monitoring CapsLock...");
+    println!("{}", get_i18n().started_monitoring);
 
     run_hook_loop()?;
 

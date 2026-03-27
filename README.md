@@ -6,6 +6,9 @@
 
 Repurpose the CapsLock key for switching input methods on Windows.
 
+The name "Capsense" comes from "CapsLock" + "Sense", as in making the CapsLock key make sense
+by giving it a new function to enhance the input experience.
+
 ## Why?
 
 On Windows, the default shortcuts for switching input languages (such as `Shift` and `Win + Space`)
@@ -73,6 +76,7 @@ On first run, a `config.toml` file will be created in the same directory. You ca
         - `0x0412`: Korean
 - `no_en`: When enabled, Capsense prevent your Chinese IMEs from entering English mode after layout or focus changes.
   `true` by default.
+  - Idea from [`mbbill/no_english_mode`](https://github.com/mbbill/no_english_mode).
 
 ## License
 

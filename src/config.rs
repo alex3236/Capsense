@@ -53,5 +53,5 @@ pub fn load_config() {
     };
     let mut global_conf = CONFIG.write().unwrap();
     *global_conf = Some(config);
-    println!("Config loaded/reloaded.");
+    println!("{}", crate::i18n::get_i18n().config_loaded);
 }

@@ -9,6 +9,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 };
 
 use crate::hook::WM_RELOAD_CONFIG;
+use crate::i18n::get_i18n;
 use crate::utils::{encode_wide, send_msg_to_instance};
 
 const ID_STOP_BUTTON: usize = 1;
@@ -16,7 +17,8 @@ const ID_RELOAD_BUTTON: usize = 2;
 const ID_EDIT_BUTTON: usize = 3;
 
 pub fn show_instance_manager_window(pid: u32) {
-    let window_title = encode_wide("Capsense");
+    let i18n = get_i18n();
+    let window_title = encode_wide(i18n.title);
     let class_name = encode_wide("CapsenseManagerWindowClass");
 
     println!(
@@ -75,13 +77,11 @@ pub fn show_instance_manager_window(pid: u32) {
             return;
         }
 
-        println!("Window created successfully: {:?}", hwnd);
-
         // Bring to front
         windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(hwnd);
 
         // Display PID label
-        let pid_text = encode_wide(&format!("Capsense is running with PID: {}", pid));
+        let pid_text = encode_wide(&*i18n.running_pid.replace("{}", &pid.to_string()));
         let static_class = encode_wide("STATIC");
         CreateWindowExW(
             0,
@@ -101,7 +101,7 @@ pub fn show_instance_manager_window(pid: u32) {
         let button_class = encode_wide("BUTTON");
 
         // Stop Button
-        let stop_text = encode_wide("Stop Instance");
+        let stop_text = encode_wide(i18n.stop_instance);
         CreateWindowExW(
             0,
             button_class.as_ptr(),
@@ -118,7 +118,7 @@ pub fn show_instance_manager_window(pid: u32) {
         );
 
         // Reload Button
-        let reload_text = encode_wide("Reload Config");
+        let reload_text = encode_wide(i18n.reload_config);
         CreateWindowExW(
             0,
             button_class.as_ptr(),
@@ -135,7 +135,7 @@ pub fn show_instance_manager_window(pid: u32) {
         );
 
         // Edit Button
-        let edit_text = encode_wide("Edit Config");
+        let edit_text = encode_wide(i18n.edit_config);
         CreateWindowExW(
             0,
             button_class.as_ptr(),
@@ -152,14 +152,12 @@ pub fn show_instance_manager_window(pid: u32) {
         );
 
         ShowWindow(hwnd, windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOW);
-        println!("ShowWindow called.");
 
         let mut msg: MSG = std::mem::zeroed();
         while GetMessageW(&mut msg, 0, 0, 0) > 0 {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
-        println!("Message loop exited.");
     }
 }
 
@@ -169,19 +167,20 @@ unsafe extern "system" fn window_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    let i18n = get_i18n();
     match msg {
         WM_COMMAND => {
             let id = wparam as usize;
             match id {
                 ID_STOP_BUTTON => {
                     if send_msg_to_instance(WM_CLOSE) {
-                        create_alert_window("Sent stop signal to instance.");
+                        create_alert_window(i18n.stop_signal_sent);
                         std::process::exit(0);
                     }
                 }
                 ID_RELOAD_BUTTON => {
                     if send_msg_to_instance(WM_RELOAD_CONFIG) {
-                        create_alert_window("Sent reload signal to instance.");
+                        create_alert_window(i18n.reload_signal_sent);
                     }
                 }
                 ID_EDIT_BUTTON => {
@@ -207,7 +206,7 @@ unsafe extern "system" fn window_proc(
 }
 
 pub fn create_alert_window(message: &str) {
-    let title_w = encode_wide("Capsense");
+    let title_w = encode_wide(get_i18n().title);
     let message_w = encode_wide(message);
 
     unsafe {
