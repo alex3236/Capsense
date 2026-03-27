@@ -1,4 +1,4 @@
-use crate::utils::summon_alert_window;
+use crate::window::create_alert_window;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::sync::RwLock;
@@ -33,12 +33,18 @@ lazy_static::lazy_static! {
 
 pub fn load_config() {
     let config = if let Ok(content) = fs::read_to_string(CONFIG_PATH) {
-        toml::from_str(&content).unwrap_or_else(|_| Config::default())
+        let config: Config = toml::from_str(&content).unwrap_or_else(|_| Config::default());
+
+        // Save back to file to fill in missing default values
+        let new_content = toml::to_string(&config).unwrap();
+        if content != new_content {
+            let _ = fs::write(CONFIG_PATH, new_content);
+        }
+        config
     } else {
         let default = Config::default();
         let _ = fs::write(CONFIG_PATH, toml::to_string(&default).unwrap());
-        summon_alert_window(
-            "Capsense\n",
+        create_alert_window(
             "Capsense is in no-English mode by default, \
             which prevent your Chinese IME from entering English mode after layout or focus changes.\n\
             You can change this setting in the configuration file.",
@@ -49,4 +55,3 @@ pub fn load_config() {
     *global_conf = Some(config);
     println!("Config loaded/reloaded.");
 }
-

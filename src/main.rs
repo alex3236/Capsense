@@ -6,14 +6,17 @@ use std::ptr::null_mut;
 use windows_sys::Win32::System::Threading::CreateMutexW;
 use windows_sys::Win32::UI::WindowsAndMessaging::WM_CLOSE;
 
-mod hook;
-pub mod utils;
 pub mod config;
+pub mod hook;
+pub mod utils;
+pub mod window;
 
-use crate::config::load_config;
-use crate::hook::{run_hook_loop, WM_RELOAD_CONFIG};
-use crate::utils::{
-    attach_console, encode_wide, send_msg_to_instance, set_startup,
+use crate::window::create_alert_window;
+use config::load_config;
+use hook::{run_hook_loop, WM_RELOAD_CONFIG};
+use utils::{
+    attach_console, encode_wide, get_parent_process_name, get_startup_command,
+    send_msg_to_instance, set_startup,
 };
 
 lazy_static::lazy_static! {
@@ -43,6 +46,12 @@ struct Args {
     #[arg(long, short = 'd')]
     daemon: bool,
 
+    #[arg(long)]
+    gui: bool,
+
+    #[arg(long)]
+    headless: bool,
+
     #[arg(long, value_enum)]
     startup: Option<ToggleAction>,
 }
@@ -52,35 +61,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         attach_console();
     }
 
-    let args = Args::parse();
+    let mut args = Args::parse();
 
-    // Handle daemonization
-    if args.daemon {
-        let exe_path = std::env::current_exe()?;
-        let mut command = std::process::Command::new(exe_path);
-
-        // Strip the daemon flag to avoid infinite recursion
-        for arg in std::env::args().skip(1) {
-            if arg != "--daemon" && arg != "-d" {
-                command.arg(arg);
-            }
+    // Ensure startup command has --headless if it exists
+    if let Some(cmd) = get_startup_command() {
+        if !cmd.contains("--headless") {
+            args.headless = true; // Run headless the first time we know startup argument wrong
+            let _ = set_startup(true);
         }
-
-        command.spawn()?;
-        println!("Capsense started in background.");
-        return Ok(());
     }
+
+    // Determine whether to display GUI based on arguments and parent process
+    let display_gui = if args.headless {
+        false
+    } else if args.gui {
+        true
+    } else if let Some(parent) = get_parent_process_name() {
+        parent.to_lowercase().contains("explorer.exe")
+    } else {
+        false
+    };
 
     // Handle startup command
     if let Some(action) = args.startup {
         match action {
             ToggleAction::Enable => {
                 set_startup(true)?;
-                println!("Capsense Will now start on system startup.");
+                println!("Capsense Will now start on user login.");
             }
             ToggleAction::Disable => {
                 set_startup(false)?;
-                println!("Capsense Will no longer start on system startup.");
+                println!("Capsense Will no longer start on user login.");
             }
         }
         return Ok(());
@@ -88,7 +99,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Handle status command
     if args.status {
-        if let Some(pid) = crate::utils::get_instance_pid() {
+        if let Some(pid) = utils::get_instance_pid() {
             println!("Capsense running with PID: {}", pid);
         } else {
             println!("No running instance found.");
@@ -121,16 +132,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let handle = CreateMutexW(null_mut(), 1, MUTEX_NAME.as_ptr());
         if handle == 0 || windows_sys::Win32::Foundation::GetLastError() == 183 {
             // 183 = ERROR_ALREADY_EXISTS
+
+            // Summon instance manager window if started from explorer
+            if display_gui && let Some(pid) = utils::get_instance_pid() {
+                window::show_instance_manager_window(pid);
+                return Ok(());
+            }
+
             eprintln!("Another instance is already running. Use --stop or --reload.");
             return Ok(());
         }
+    }
+
+    // Handle demonization after single instance check
+    if args.daemon {
+        let exe_path = std::env::current_exe()?;
+        let mut command = std::process::Command::new(exe_path);
+
+        // Strip the daemon flag to avoid infinite recursion
+        for arg in std::env::args().skip(1) {
+            if arg != "--daemon" && arg != "-d" {
+                command.arg(arg);
+            }
+        }
+
+        command.spawn()?;
+        println!("Capsense started in background.");
+        return Ok(());
     }
 
     // Load configuration
     load_config();
 
     // Run hook loop
+    if display_gui && !args.headless {
+        create_alert_window(
+            "Capsense started in background.\n\
+            Run again to show control panel or use CLI commands to control it.",
+        );
+    }
     println!("Started. Monitoring CapsLock...");
+
     run_hook_loop()?;
 
     Ok(())

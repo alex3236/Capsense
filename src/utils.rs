@@ -2,12 +2,12 @@ use crate::config::load_config;
 use crate::hook::{WINDOW_CLASS_NAME, WM_RELOAD_CONFIG};
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::thread;
 use std::time::Duration;
-use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
+use std::{mem, thread};
+use windows_sys::Win32::Foundation::{HWND, INVALID_HANDLE_VALUE, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Registry::{
-    RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY_CURRENT_USER, KEY_SET_VALUE,
+    RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY_CURRENT_USER,
     REG_SZ,
 };
 use windows_sys::Win32::System::SystemServices::LANG_CHINESE;
@@ -25,7 +25,9 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 };
 
 use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
-use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
+use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+};
 
 // Console
 
@@ -76,7 +78,7 @@ pub(crate) fn send_inputs(inputs: &[INPUT]) {
 
 pub(crate) fn key_down(vk: u16) -> INPUT {
     unsafe {
-        let mut input = std::mem::zeroed::<INPUT>();
+        let mut input = mem::zeroed::<INPUT>();
         input.r#type = INPUT_KEYBOARD;
         input.Anonymous.ki = KEYBDINPUT {
             wVk: vk,
@@ -91,7 +93,7 @@ pub(crate) fn key_down(vk: u16) -> INPUT {
 
 pub(crate) fn key_up(vk: u16) -> INPUT {
     unsafe {
-        let mut input = std::mem::zeroed::<INPUT>();
+        let mut input = mem::zeroed::<INPUT>();
         input.r#type = INPUT_KEYBOARD;
         input.Anonymous.ki = KEYBDINPUT {
             wVk: vk,
@@ -313,12 +315,60 @@ pub fn get_instance_pid() -> Option<u32> {
         let hwnd = FindWindowW(WINDOW_CLASS_NAME.as_ptr(), null_mut());
         if hwnd != 0 {
             let mut pid = 0;
-            windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(hwnd, &mut pid);
+            GetWindowThreadProcessId(hwnd, &mut pid);
             Some(pid)
         } else {
             None
         }
     }
+}
+
+// Process Helpers
+
+pub(crate) fn get_parent_process_name() -> Option<String> {
+    let current_pid = std::process::id();
+    let mut parent_pid = 0;
+
+    unsafe {
+        // Take a snapshot of all processes
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == INVALID_HANDLE_VALUE {
+            return None;
+        }
+
+        let mut entry: PROCESSENTRY32W = mem::zeroed();
+        entry.dwSize = size_of::<PROCESSENTRY32W>() as u32;
+
+        if Process32FirstW(snapshot, &mut entry) != 0 {
+            loop {
+                if entry.th32ProcessID == current_pid {
+                    parent_pid = entry.th32ParentProcessID;
+                    break;
+                }
+                if Process32NextW(snapshot, &mut entry) == 0 {
+                    break;
+                }
+            }
+        }
+
+        // Now find the name of the parent_pid
+        if parent_pid != 0 {
+            if Process32FirstW(snapshot, &mut entry) != 0 {
+                loop {
+                    if entry.th32ProcessID == parent_pid {
+                        let name = String::from_utf16_lossy(&entry.szExeFile)
+                            .trim_matches(char::from(0))
+                            .to_string();
+                        return Some(name);
+                    }
+                    if Process32NextW(snapshot, &mut entry) == 0 {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 // String and Registry Helpers
@@ -330,16 +380,18 @@ pub fn encode_wide(s: &str) -> Vec<u16> {
 }
 
 pub fn set_startup(enable: bool) -> Result<(), String> {
-    let run_key = encode_wide("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
-    let app_name = encode_wide("Capsense");
+    let run_key = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+    let app_name = "Capsense";
+    let run_key_wide = encode_wide(run_key);
+    let app_name_wide = encode_wide(app_name);
 
     unsafe {
         let mut hkey = 0 as _;
         let res = RegOpenKeyExW(
             HKEY_CURRENT_USER,
-            run_key.as_ptr(),
+            run_key_wide.as_ptr(),
             0,
-            KEY_SET_VALUE,
+            windows_sys::Win32::System::Registry::KEY_ALL_ACCESS,
             &mut hkey,
         );
 
@@ -350,15 +402,16 @@ pub fn set_startup(enable: bool) -> Result<(), String> {
         if enable {
             let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
             let path_str = exe_path.to_str().ok_or("Invalid executable path")?;
-            let wide_path = encode_wide(path_str);
+            let cmd = format!("\"{}\" --headless", path_str);
+            let wide_cmd = encode_wide(&cmd);
 
             let res = RegSetValueExW(
                 hkey,
-                app_name.as_ptr(),
+                app_name_wide.as_ptr(),
                 0,
                 REG_SZ,
-                wide_path.as_ptr() as *const u8,
-                (wide_path.len() * 2) as u32,
+                wide_cmd.as_ptr() as *const u8,
+                (wide_cmd.len() * 2) as u32,
             );
 
             RegCloseKey(hkey);
@@ -366,9 +419,8 @@ pub fn set_startup(enable: bool) -> Result<(), String> {
                 return Err(format!("Failed to set registry value: {}", res));
             }
         } else {
-            let res = RegDeleteValueW(hkey, app_name.as_ptr());
+            let res = RegDeleteValueW(hkey, app_name_wide.as_ptr());
             RegCloseKey(hkey);
-            // 2 = ERROR_FILE_NOT_FOUND, which is fine if we're disabling and it's not there
             if res != 0 && res != 2 {
                 return Err(format!("Failed to delete registry value: {}", res));
             }
@@ -378,16 +430,30 @@ pub fn set_startup(enable: bool) -> Result<(), String> {
     Ok(())
 }
 
-pub fn summon_alert_window(title: &str, message: &str) {
-    let title_w = encode_wide(title);
-    let message_w = encode_wide(message);
+pub fn get_startup_command() -> Option<String> {
+    use windows_sys::Win32::System::Registry::{RegQueryValueExW, KEY_READ};
+    let run_key = encode_wide("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+    let app_name = encode_wide("Capsense");
 
     unsafe {
-        MessageBoxW(
-            0,
-            message_w.as_ptr(),
-            title_w.as_ptr(),
-            MB_OK | MB_ICONINFORMATION,
-        );
+        let mut hkey = 0 as _;
+        if RegOpenKeyExW(HKEY_CURRENT_USER, run_key.as_ptr(), 0, KEY_READ, &mut hkey) != 0 {
+            return None;
+        }
+
+        let mut len = 0;
+        if RegQueryValueExW(hkey, app_name.as_ptr(), null_mut(), null_mut(), null_mut(), &mut len) != 0 {
+            RegCloseKey(hkey);
+            return None;
+        }
+
+        let mut buffer = vec![0u16; (len / 2) as usize];
+        if RegQueryValueExW(hkey, app_name.as_ptr(), null_mut(), null_mut(), buffer.as_mut_ptr() as *mut u8, &mut len) != 0 {
+            RegCloseKey(hkey);
+            return None;
+        }
+
+        RegCloseKey(hkey);
+        Some(String::from_utf16_lossy(&buffer).trim_matches(char::from(0)).to_string())
     }
 }

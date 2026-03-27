@@ -26,8 +26,12 @@ still retaining the ability to use `CapsLock` for its original purpose.
 
 Simply run the executable to start monitoring `CapsLock` events.
 
-If you double click the executable, there will be no window or console, but the program will be running in the
-background.
+If you run the executable from Explorer again while an instance is already running,
+an **Instance Manager** window will appear, allowing you to stop the running instance,
+reload the configuration, or edit the `config.toml` file.
+
+Capsense is interactive by default in Explorer but headless in CLI.
+You can override this behavior with the command-line arguments.
 
 We recommend setting your IMEs to disable the functionality of the `Shift` key for switching IME states to get the best
 experience, as it can confuse you. Instead, you use `CapsLock` to switch keyboard layouts, Use `Win+Space` to switch the
@@ -41,6 +45,8 @@ The program supports the following command-line arguments:
 - `-s, --stop`: Stop running instance of Capsense.
 - `-r, --reload`: Reload the configuration from `config.toml` for the running instance.
 - `-S, --status`: Check if a Capsense instance is running and show its PID.
+- `--gui`: Allow Capsense to show GUI windows.
+- `--headless`: Prevent Capsense from showing any GUI windows.
 - `--startup <enable|disable>`: Enable or disable the program starting automatically with Windows.
 
 ## Configuration
@@ -50,8 +56,8 @@ On first run, a `config.toml` file will be created in the same directory. You ca
 - `tap_threshold_ms`: The maximum duration (in milliseconds) for a `CapsLock` press to be considered a "tap". `300` ms
   by default.
 - `tap_action`: The action to perform on a tap. Supported actions are:
-  - `shortcut`: Trigger a keyboard shortcut (defined by `tap_shortcut`).
-  - `switch_layout`: (Default) Rotate through input layouts.
+    - `shortcut`: Trigger a keyboard shortcut (defined by `tap_shortcut`).
+    - `switch_layout`: (Default) Rotate through input layouts.
 - `tap_shortcut`: The shortcut to trigger (`["LWIN", "SPACE"]` by default). Supported keys are:
     - `LWIN` (or `WIN`)
     - `SPACE`
@@ -60,11 +66,11 @@ On first run, a `config.toml` file will be created in the same directory. You ca
     - `LMENU` (or `ALT`)
     - `CAPSLOCK`
 - `layouts`: A list of input layout IDs to rotate through when `tap_action` is set to `switch_layout`.
-  - Default: `[0x0804, 0x0409]` (`zh-CN` and `en-GB`).
-  - See [Microsoft's documentation](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/70feba9f-294e-491e-b6eb-56532684c37f) for more layout IDs. Other common ones are:
-    - `0x0404`: Traditional Chinese
-    - `0x0411`: Japanese
-    - `0x0412`: Korean
+    - Default: `[0x0804, 0x0409]` (`zh-CN` and `en-GB`).
+    - See [Microsoft's documentation](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/70feba9f-294e-491e-b6eb-56532684c37f) for more layout IDs. Other common ones are:
+        - `0x0404`: Traditional Chinese
+        - `0x0411`: Japanese
+        - `0x0412`: Korean
 - `no_en`: When enabled, Capsense prevent your Chinese IMEs from entering English mode after layout or focus changes.
   `true` by default.
 
