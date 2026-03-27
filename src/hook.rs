@@ -3,8 +3,8 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::config::CONFIG;
 use crate::utils::*;
-use crate::CONFIG;
 
 use windows_sys::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
