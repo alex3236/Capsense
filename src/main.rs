@@ -13,20 +13,26 @@ mod hook;
 pub mod utils;
 
 use crate::hook::{run_hook_loop, WM_RELOAD_CONFIG};
-use crate::utils::{attach_console, encode_wide, send_msg_to_instance, set_startup};
+use crate::utils::{
+    attach_console, encode_wide, send_msg_to_instance, set_startup, summon_alert_window,
+};
 
 lazy_static::lazy_static! {
     static ref MUTEX_NAME: Vec<u16> = encode_wide("CapsCustomHookMutex");
 }
 
+const CONFIG_PATH: &str = "config.toml";
+
 // Configuration
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(default)]
 pub struct Config {
     pub tap_threshold_ms: u64,
     pub tap_action: String,
     pub tap_shortcut: Vec<String>, // ["LWIN", "SPACE"]
-    pub layouts: Vec<i32>
+    pub layouts: Vec<i32>,
+    pub no_en: bool,
 }
 
 impl Default for Config {
@@ -35,7 +41,8 @@ impl Default for Config {
             tap_threshold_ms: 300,
             tap_action: "switch_layout".to_string(),
             tap_shortcut: vec!["LWIN".to_string(), "SPACE".to_string()],
-            layouts: vec![0x0804, 0x0409]
+            layouts: vec![0x0804, 0x0409],
+            no_en: true,
         }
     }
 }
@@ -46,7 +53,7 @@ pub static CONFIG: RwLock<Option<Config>> = RwLock::new(None);
 // CLI Arguments
 
 #[derive(clap::ValueEnum, Clone, Debug)]
-enum StartupAction {
+enum ToggleAction {
     Enable,
     Disable,
 }
@@ -67,7 +74,7 @@ struct Args {
     daemon: bool,
 
     #[arg(long, value_enum)]
-    startup: Option<StartupAction>,
+    startup: Option<ToggleAction>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -97,11 +104,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Handle startup command
     if let Some(action) = args.startup {
         match action {
-            StartupAction::Enable => {
+            ToggleAction::Enable => {
                 set_startup(true)?;
                 println!("Capsense Will now start on system startup.");
             }
-            StartupAction::Disable => {
+            ToggleAction::Disable => {
                 set_startup(false)?;
                 println!("Capsense Will no longer start on system startup.");
             }
@@ -160,12 +167,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub fn load_config() {
-    let path = "config.toml";
-    let config = if let Ok(content) = fs::read_to_string(path) {
+    let config = if let Ok(content) = fs::read_to_string(CONFIG_PATH) {
         toml::from_str(&content).unwrap_or_else(|_| Config::default())
     } else {
         let default = Config::default();
-        let _ = fs::write(path, toml::to_string(&default).unwrap());
+        let _ = fs::write(CONFIG_PATH, toml::to_string(&default).unwrap());
+        summon_alert_window(
+            "Capsense\n",
+            "Capsense is in no-English mode by default, \
+            which prevent your Chinese IME from entering English mode after layout or focus changes.\n\
+            You can change this setting in the configuration file.",
+        );
         default
     };
     let mut global_conf = CONFIG.write().unwrap();

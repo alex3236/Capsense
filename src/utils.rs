@@ -1,11 +1,20 @@
 use crate::hook::{WINDOW_CLASS_NAME, WM_RELOAD_CONFIG};
 use crate::load_config;
+use std::ffi::OsStr;
+use std::os::windows::ffi::OsStrExt;
 use std::ptr::null_mut;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::thread;
+use std::time::Duration;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Registry::{
     RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY_CURRENT_USER, KEY_SET_VALUE,
     REG_SZ,
+};
+use windows_sys::Win32::System::SystemServices::LANG_CHINESE;
+use windows_sys::Win32::UI::Input::Ime::{
+    ImmGetDefaultIMEWnd, ImmIsIME, IMC_SETCONVERSIONMODE, IME_CMODE_CHINESE, IME_CMODE_SYMBOL,
 };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     GetKeyboardLayout, SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CAPITAL,
@@ -13,11 +22,18 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetForegroundWindow,
-    GetMessageW, GetWindowThreadProcessId, PostMessageW, RegisterClassW, MSG, WM_CLOSE,
-    WM_INPUTLANGCHANGEREQUEST, WNDCLASSW,
+    GetMessageW, GetWindowThreadProcessId, PostMessageW, RegisterClassW, SendMessageW, MSG,
+    WM_CLOSE, WM_IME_CONTROL, WM_INPUTLANGCHANGEREQUEST, WNDCLASSW,
 };
 
 use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+
+use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
+
+const IME_MODE_SYNC_DELAY_MS: u64 = 50;
+const CHINESE_IME_CONVERSION_MODE: isize = (IME_CMODE_CHINESE | IME_CMODE_SYMBOL) as isize;
+const PRIMARY_LANGUAGE_ID_MASK: u16 = 0x03ff;
+static LATEST_IME_SYNC_REQUEST_ID: AtomicU32 = AtomicU32::new(0);
 
 pub(crate) unsafe fn attach_console() {
     unsafe {
@@ -119,7 +135,7 @@ pub(crate) unsafe fn get_current_hkl() -> usize {
     }
 }
 
-pub(crate) fn rotate_layout(layouts: &[i32]) {
+pub(crate) fn rotate_layout(layouts: &[i32], no_en: bool) {
     if layouts.is_empty() {
         return;
     }
@@ -138,7 +154,76 @@ pub(crate) fn rotate_layout(layouts: &[i32]) {
         };
 
         set_keyboard_layout(layouts[next_index] as usize);
+        if no_en {
+            let hwnd = GetForegroundWindow();
+            schedule_chinese_ime_mode_sync(hwnd, true);
+        }
     }
+}
+
+pub(crate) fn schedule_chinese_ime_mode_sync(hwnd: HWND, require_same_foreground: bool) {
+    if hwnd == 0 {
+        return;
+    }
+
+    let request_id = LATEST_IME_SYNC_REQUEST_ID
+        .fetch_add(1, Ordering::SeqCst)
+        .wrapping_add(1);
+
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(IME_MODE_SYNC_DELAY_MS));
+
+        if LATEST_IME_SYNC_REQUEST_ID.load(Ordering::SeqCst) != request_id {
+            return;
+        }
+
+        unsafe {
+            if require_same_foreground && GetForegroundWindow() != hwnd {
+                return;
+            }
+
+            let current_hkl = get_keyboard_layout_for_window(hwnd);
+            if !is_chinese_ime(current_hkl) {
+                return;
+            }
+
+            let ime_hwnd = ImmGetDefaultIMEWnd(hwnd);
+            if ime_hwnd == 0 {
+                return;
+            }
+
+            SendMessageW(
+                ime_hwnd,
+                WM_IME_CONTROL,
+                IMC_SETCONVERSIONMODE as usize,
+                CHINESE_IME_CONVERSION_MODE,
+            );
+        }
+    });
+}
+
+unsafe fn get_keyboard_layout_for_window(hwnd: HWND) -> usize {
+    unsafe {
+        let thread_id = GetWindowThreadProcessId(hwnd, null_mut());
+        if thread_id == 0 {
+            return 0;
+        }
+        GetKeyboardLayout(thread_id) as usize
+    }
+}
+
+fn is_chinese_ime(hkl: usize) -> bool {
+    if hkl == 0 {
+        return false;
+    }
+
+    let language_id = (hkl & 0xFFFF) as u16;
+    primary_language_id(language_id) == LANG_CHINESE as u16
+        && unsafe { ImmIsIME(hkl as isize) != 0 }
+}
+
+fn primary_language_id(language_id: u16) -> u16 {
+    language_id & PRIMARY_LANGUAGE_ID_MASK
 }
 
 // IPC via hidden window
@@ -288,4 +373,25 @@ pub fn set_startup(enable: bool) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+pub fn summon_alert_window(title: &str, message: &str) {
+    let title_w = to_wide(title);
+    let message_w = to_wide(message);
+
+    unsafe {
+        MessageBoxW(
+            0,
+            message_w.as_ptr(),
+            title_w.as_ptr(),
+            MB_OK | MB_ICONINFORMATION,
+        );
+    }
+}
+
+fn to_wide(s: &str) -> Vec<u16> {
+    OsStr::new(s)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
 }

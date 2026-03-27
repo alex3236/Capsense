@@ -65,6 +65,8 @@ On first run, a `config.toml` file will be created in the same directory. You ca
     - `0x0404`: Traditional Chinese
     - `0x0411`: Japanese
     - `0x0412`: Korean
+- `no_en`: When enabled, Capsense prevent your Chinese IMEs from entering English mode after layout or focus changes.
+  `true` by default.
 
 ## License
 
