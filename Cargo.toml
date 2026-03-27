@@ -3,7 +3,7 @@ name = "Capsense"
 authors = ["Alex3236"]
 license = "GPL-3"
 homepage = "https://github.com/Alex3236/Capsense"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 
 [dependencies]
