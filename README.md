@@ -104,8 +104,15 @@ The program supports the following command-line arguments:
 ```shell
 git clone https://github.com/alex3236/Capsense
 cd Capsense
+
+# Build the default variant with all features
 cargo build
-cargo build --no-default-features --bin Capsense-headless
+
+# Build the headless variant without GUI features
+cargo build --no-default-features
+
+# Build all
+.\build_all.ps1
 ```
 
 ## License

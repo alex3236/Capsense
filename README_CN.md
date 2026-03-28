@@ -97,8 +97,15 @@ Capsense 本身不依赖管理员权限。
 ```shell
 git clone https://github.com/alex3236/Capsense
 cd Capsense
+
+# Build the default variant with all features
 cargo build
-cargo build --no-default-features --bin Capsense-headless
+
+# Build the headless variant without GUI features
+cargo build --no-default-features
+
+# Build all
+.\build_all.ps1
 ```
 
 ## 许可
