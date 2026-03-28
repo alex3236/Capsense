@@ -6,7 +6,9 @@ use std::ptr::null_mut;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 use std::{mem, thread};
-use windows_sys::Win32::Foundation::{HWND, INVALID_HANDLE_VALUE, LPARAM, LRESULT, POINT, WPARAM};
+#[cfg(feature = "gui")]
+use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::Security::{
     GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
 };
@@ -33,6 +35,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 
 use crate::i18n::get_i18n;
 use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+#[cfg(feature = "gui")]
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
@@ -414,6 +417,7 @@ pub(crate) fn is_process_elevated(pid: u32) -> bool {
 
 // Process Helpers
 
+#[cfg(feature = "gui")]
 pub(crate) fn get_parent_process_name() -> Option<String> {
     let current_pid = std::process::id();
     let mut parent_pid = 0;

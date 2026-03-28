@@ -9,22 +9,33 @@ use windows_sys::Win32::UI::WindowsAndMessaging::WM_CLOSE;
 pub mod config;
 pub mod hook;
 pub mod i18n;
+pub mod ui;
 pub mod utils;
+#[cfg(feature = "gui")]
 pub mod window;
 
 use crate::i18n::get_i18n;
+use crate::ui::create_alert_window;
 use crate::utils::is_task_enabled;
-use crate::window::create_alert_window;
 use config::load_config;
 use hook::{run_hook_loop, WM_RELOAD_CONFIG};
+#[cfg(feature = "gui")]
+use utils::get_parent_process_name;
 use utils::{
-    attach_console, encode_wide, get_parent_process_name, get_startup_command, is_elevated,
-    send_msg_to_instance, set_startup,
+    attach_console, encode_wide, get_startup_command, is_elevated, send_msg_to_instance,
+    set_startup,
 };
 
 lazy_static::lazy_static! {
     static ref MUTEX_NAME: Vec<u16> = encode_wide("CapsCustomHookMutex");
     pub(crate) static ref DISPLAY_GUI: bool = {
+        #[cfg(not(feature = "gui"))]
+        {
+            false
+        }
+
+        #[cfg(feature = "gui")]
+        {
         let args = Args::parse();
         if args.headless {
             false
@@ -34,6 +45,7 @@ lazy_static::lazy_static! {
             parent.to_lowercase().contains("explorer.exe")
         } else {
             false
+        }
         }
     };
 }
@@ -101,6 +113,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut args = Args::parse();
+
+    #[cfg(not(feature = "gui"))]
+    if args.gui {
+        println!("This build does not include GUI support; continuing in headless mode.");
+    }
 
     // Ensure startup command has --headless if it exists
     if let Some(cmd) = get_startup_command() {
@@ -215,7 +232,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Summon instance manager window if started from explorer
             if *DISPLAY_GUI && let Some(pid) = utils::get_instance_pid() {
-                window::show_instance_manager_window(pid);
+                ui::show_instance_manager_window(pid);
                 return Ok(());
             }
 

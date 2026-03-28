@@ -1,5 +1,5 @@
 use crate::i18n::get_i18n;
-use crate::window::create_alert_window;
+use crate::ui::create_alert_window;
 use crate::DISPLAY_GUI;
 use serde::{Deserialize, Serialize};
 use std::fs;

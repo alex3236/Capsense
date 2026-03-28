@@ -93,6 +93,21 @@ The program supports the following command-line arguments:
   - `--user`: Use user level startup (registry) instead of machine level (task scheduler).
   - Capsense will always try to disable both kinds of startup when `--startup disable` is called.
 
+## Variants
+
+- `Capsense` is the default build that includes all features.
+- `Capsense-headless` unbundles the GUI components and always runs in headless mode.
+  Ideal if you want extremely low resource usage.
+
+## Development
+
+```shell
+git clone https://github.com/alex3236/Capsense
+cd Capsense
+cargo build
+cargo build --no-default-features --bin Capsense-headless
+```
+
 ## License
 
 ```

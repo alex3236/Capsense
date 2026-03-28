@@ -87,6 +87,20 @@ Capsense 本身不依赖管理员权限。
   - `--user`：使用用户级自启（注册表）而不是系统级（任务计划程序）。
   - 调用 `--startup disable` 时，Capsense 将始终尝试禁用这两种自启方式。
 
+## 变体
+
+- `Capsense` 是默认构建版本，包含所有功能。
+- `Capsense-headless` 不包含 GUI 组件，始终以无头模式运行。如果您想要极低的资源占用，这是理想的选择。
+
+## 开发
+
+```shell
+git clone https://github.com/alex3236/Capsense
+cd Capsense
+cargo build
+cargo build --no-default-features --bin Capsense-headless
+```
+
 ## 许可
 
 ```
