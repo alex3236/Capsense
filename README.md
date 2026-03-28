@@ -29,10 +29,6 @@ still retaining the ability to use `CapsLock` for its original purpose.
 
 Simply run the executable to start monitoring `CapsLock` events.
 
-If you run the executable from Explorer again while an instance is already running,
-an **Instance Manager** window will appear, allowing you to stop the running instance,
-reload the configuration, or edit the `config.toml` file.
-
 Capsense is interactive by default in Explorer but headless in CLI.
 You can override this behavior with the command-line arguments.
 
@@ -40,17 +36,21 @@ We recommend setting your IMEs to disable the functionality of the `Shift` key f
 experience, as it can confuse you. Instead, you use `CapsLock` to switch keyboard layouts, Use `Win+Space` to switch the
 primary IME of the current keyboard layout.
 
-### Arguments
+## Instance Manager
 
-The program supports the following command-line arguments:
+Run Capsense from Explorer or with `--gui` while an instance is already running to open
+the Instance Manager, which allows you to control the running instance without using the command line.
 
-- `-d, --daemon`: Start Capsense in the background.
-- `-s, --stop`: Stop running instance of Capsense.
-- `-r, --reload`: Reload the configuration from `config.toml` for the running instance.
-- `-S, --status`: Check if a Capsense instance is running and show its PID.
-- `--gui`: Allow Capsense to show GUI windows.
-- `--headless`: Prevent Capsense from showing any GUI windows.
-- `--startup <enable|disable>`: Enable or disable the program starting automatically with Windows.
+![Instance Manager](.github/assets/manager_en.webp)
+
+## Administrator Privileges
+
+Capsense does not require administrator privileges to run.
+
+However, if you want to allow Capsense to switch input methods in elevated applications (running as administrator),
+you need to run Capsense with administrator privileges as well.
+
+And of course, you can't control elevated Capsense itself from a non-elevated instance.
 
 ## Configuration
 
@@ -77,6 +77,21 @@ On first run, a `config.toml` file will be created in the same directory. You ca
 - `no_en`: When enabled, Capsense prevent your Chinese IMEs from entering English mode after layout or focus changes.
   `true` by default.
   - Idea from [`mbbill/no_english_mode`](https://github.com/mbbill/no_english_mode).
+
+### Arguments
+
+The program supports the following command-line arguments:
+
+- `-h, --help`: Show this help message and exit.
+- `-d, --daemon`: Start Capsense in the background.
+- `-s, --stop`: Stop running instance of Capsense.
+- `-r, --reload`: Reload the configuration from `config.toml` for the running instance.
+- `-S, --status`: Check if a Capsense instance is running and show its PID.
+- `--gui`: Allow Capsense to show GUI windows.
+- `--headless`: Prevent Capsense from showing any GUI windows.
+- `--startup <enable|disable> [--user]`: Enable or disable the program starting automatically with Windows.
+  - `--user`: Use user level startup (registry) instead of machine level (task scheduler).
+  - Capsense will always try to disable both kinds of startup when `--startup disable` is called.
 
 ## License
 

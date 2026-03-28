@@ -1,16 +1,23 @@
 use crate::config::load_config;
 use crate::hook::{WINDOW_CLASS_NAME, WM_RELOAD_CONFIG};
+use std::os::windows::process::CommandExt;
+use std::process::Command;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 use std::{mem, thread};
 use windows_sys::Win32::Foundation::{HWND, INVALID_HANDLE_VALUE, LPARAM, LRESULT, POINT, WPARAM};
+use windows_sys::Win32::Security::{
+    GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
+};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Registry::{
-    RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY_CURRENT_USER,
-    REG_SZ,
+    RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY_CURRENT_USER, REG_SZ,
 };
 use windows_sys::Win32::System::SystemServices::LANG_CHINESE;
+use windows_sys::Win32::System::Threading::{
+    GetCurrentProcess, OpenProcessToken, CREATE_NO_WINDOW,
+};
 use windows_sys::Win32::UI::Input::Ime::{
     ImmGetDefaultIMEWnd, ImmIsIME, IMC_SETCONVERSIONMODE, IME_CMODE_CHINESE, IME_CMODE_SYMBOL,
 };
@@ -24,6 +31,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WM_CLOSE, WM_IME_CONTROL, WM_INPUTLANGCHANGEREQUEST, WNDCLASSW,
 };
 
+use crate::i18n::get_i18n;
 use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
@@ -34,6 +42,45 @@ use windows_sys::Win32::System::Diagnostics::ToolHelp::{
 pub(crate) unsafe fn attach_console() {
     unsafe {
         AttachConsole(ATTACH_PARENT_PROCESS);
+    }
+}
+
+// Privilege Check
+
+pub fn is_elevated() -> bool {
+    unsafe {
+        let mut token = 0 as _;
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+            return false;
+        }
+
+        let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
+        let mut size = size_of::<TOKEN_ELEVATION>() as u32;
+
+        let res = GetTokenInformation(
+            token,
+            TokenElevation,
+            &mut elevation as *mut _ as *mut _,
+            size,
+            &mut size,
+        );
+
+        windows_sys::Win32::Foundation::CloseHandle(token);
+
+        res != 0 && elevation.TokenIsElevated != 0
+    }
+}
+
+pub fn is_task_enabled() -> bool {
+    let task_name = "CapsenseStartupTask";
+    let output = Command::new("schtasks")
+        .args(["/Query", "/TN", task_name, "/NH", "/FO", "CSV"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    match output {
+        Ok(out) => out.status.success(),
+        Err(_) => false,
     }
 }
 
@@ -298,14 +345,22 @@ unsafe extern "system" fn window_proc(
     }
 }
 
-pub fn send_msg_to_instance(msg: u32) -> bool {
+pub fn send_msg_to_instance(msg: u32) -> Option<bool> {
+    let pid = get_instance_pid();
+    if let Some(pid) = pid {
+        if is_process_elevated(pid) && !is_elevated() {
+            println!("{}", get_i18n().permission_denied);
+            return None;
+        }
+    }
+
     unsafe {
         let hwnd = FindWindowW(WINDOW_CLASS_NAME.as_ptr(), null_mut());
         if hwnd != 0 {
             PostMessageW(hwnd, msg, 0, 0);
-            true
+            Option::from(true)
         } else {
-            false
+            Option::from(false)
         }
     }
 }
@@ -320,6 +375,40 @@ pub fn get_instance_pid() -> Option<u32> {
         } else {
             None
         }
+    }
+}
+
+pub(crate) fn is_process_elevated(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+
+    unsafe {
+        let process_handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if process_handle == 0 {
+            return false;
+        }
+
+        let mut token = 0 as _;
+        if OpenProcessToken(process_handle, TOKEN_QUERY, &mut token) == 0 {
+            CloseHandle(process_handle);
+            return false;
+        }
+
+        let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
+        let mut size = size_of::<TOKEN_ELEVATION>() as u32;
+
+        let res = GetTokenInformation(
+            token,
+            TokenElevation,
+            &mut elevation as *mut _ as *mut _,
+            size,
+            &mut size,
+        );
+
+        CloseHandle(token);
+        CloseHandle(process_handle);
+
+        res != 0 && elevation.TokenIsElevated != 0
     }
 }
 
@@ -379,7 +468,11 @@ pub fn encode_wide(s: &str) -> Vec<u16> {
     res
 }
 
-pub fn set_startup(enable: bool) -> Result<(), String> {
+pub fn set_startup(enable: bool, use_task_scheduler: bool) -> Result<(), String> {
+    if use_task_scheduler {
+        return set_startup_task(enable);
+    }
+
     let run_key = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
     let app_name = "Capsense";
     let run_key_wide = encode_wide(run_key);
@@ -430,6 +523,55 @@ pub fn set_startup(enable: bool) -> Result<(), String> {
     Ok(())
 }
 
+fn set_startup_task(enable: bool) -> Result<(), String> {
+    let task_name = "CapsenseStartupTask";
+
+    if enable {
+        let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+        let exe = exe_path
+            .to_str()
+            .ok_or_else(|| "Invalid executable path".to_string())?;
+
+        let tr = format!(r#""{}" --headless"#, exe);
+
+        let output = Command::new("schtasks")
+            .args([
+                "/Create", "/TN", task_name, "/SC", "ONLOGON", "/RL", "HIGHEST", "/TR", &tr, "/F",
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            let msg = if !output.stderr.is_empty() {
+                String::from_utf8_lossy(&output.stderr).to_string()
+            } else {
+                String::from_utf8_lossy(&output.stdout).to_string()
+            };
+            Err(msg)
+        }
+    } else {
+        let output = Command::new("schtasks")
+            .args(["/Delete", "/TN", task_name, "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if output.status.success() || output.status.code() == Some(1) {
+            Ok(())
+        } else {
+            let msg = if !output.stderr.is_empty() {
+                String::from_utf8_lossy(&output.stderr).to_string()
+            } else {
+                String::from_utf8_lossy(&output.stdout).to_string()
+            };
+            Err(msg)
+        }
+    }
+}
+
 pub fn get_startup_command() -> Option<String> {
     use windows_sys::Win32::System::Registry::{RegQueryValueExW, KEY_READ};
     let run_key = encode_wide("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
@@ -442,18 +584,38 @@ pub fn get_startup_command() -> Option<String> {
         }
 
         let mut len = 0;
-        if RegQueryValueExW(hkey, app_name.as_ptr(), null_mut(), null_mut(), null_mut(), &mut len) != 0 {
+        if RegQueryValueExW(
+            hkey,
+            app_name.as_ptr(),
+            null_mut(),
+            null_mut(),
+            null_mut(),
+            &mut len,
+        ) != 0
+        {
             RegCloseKey(hkey);
             return None;
         }
 
         let mut buffer = vec![0u16; (len / 2) as usize];
-        if RegQueryValueExW(hkey, app_name.as_ptr(), null_mut(), null_mut(), buffer.as_mut_ptr() as *mut u8, &mut len) != 0 {
+        if RegQueryValueExW(
+            hkey,
+            app_name.as_ptr(),
+            null_mut(),
+            null_mut(),
+            buffer.as_mut_ptr() as *mut u8,
+            &mut len,
+        ) != 0
+        {
             RegCloseKey(hkey);
             return None;
         }
 
         RegCloseKey(hkey);
-        Some(String::from_utf16_lossy(&buffer).trim_matches(char::from(0)).to_string())
+        Some(
+            String::from_utf16_lossy(&buffer)
+                .trim_matches(char::from(0))
+                .to_string(),
+        )
     }
 }

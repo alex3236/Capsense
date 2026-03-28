@@ -13,16 +13,29 @@ pub mod utils;
 pub mod window;
 
 use crate::i18n::get_i18n;
+use crate::utils::is_task_enabled;
 use crate::window::create_alert_window;
 use config::load_config;
 use hook::{run_hook_loop, WM_RELOAD_CONFIG};
 use utils::{
-    attach_console, encode_wide, get_parent_process_name, get_startup_command,
+    attach_console, encode_wide, get_parent_process_name, get_startup_command, is_elevated,
     send_msg_to_instance, set_startup,
 };
 
 lazy_static::lazy_static! {
     static ref MUTEX_NAME: Vec<u16> = encode_wide("CapsCustomHookMutex");
+    pub(crate) static ref DISPLAY_GUI: bool = {
+        let args = Args::parse();
+        if args.headless {
+            false
+        } else if args.gui {
+            true
+        } else if let Some(parent) = get_parent_process_name() {
+            parent.to_lowercase().contains("explorer.exe")
+        } else {
+            false
+        }
+    };
 }
 
 // CLI Arguments
@@ -31,31 +44,55 @@ lazy_static::lazy_static! {
 enum ToggleAction {
     Enable,
     Disable,
+    Show,
 }
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "CapsLock Hook Utility")]
+#[command(
+    author,
+    version,
+    about = "Capsense",
+    long_about = "CapsLock that makes sense."
+)]
 struct Args {
-    #[arg(long, short = 's')]
+    #[arg(long, short = 's', help = "Tell the running instance to stop.")]
     stop: bool,
 
-    #[arg(long, short = 'r')]
+    #[arg(
+        long,
+        short = 'r',
+        help = "Tell the running instance to reload configuration."
+    )]
     reload: bool,
 
-    #[arg(long, short = 'S')]
+    #[arg(
+        long,
+        value_enum,
+        help = "Manage startup: enable, disable, or show current status (default if no value)",
+        num_args = 0..=1,
+        default_missing_value = "show"
+    )]
+    startup: Option<ToggleAction>,
+
+    #[arg(long, short = 'S', help = "Show status of the running instance.")]
     status: bool,
 
-    #[arg(long, short = 'd')]
+    #[arg(long, short = 'd', help = "Run as a background process.")]
     daemon: bool,
 
-    #[arg(long)]
+    #[arg(long, help = "Force show GUI.", conflicts_with = "headless")]
     gui: bool,
 
-    #[arg(long)]
+    #[arg(long, help = "Run without GUI.", conflicts_with = "gui")]
     headless: bool,
 
-    #[arg(long, value_enum)]
-    startup: Option<ToggleAction>,
+    #[arg(
+        long,
+        requires = "startup",
+        help_heading = "Options of --startup",
+        help = "User level startup (registry) instead of machine level (task scheduler)."
+    )]
+    user: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -69,32 +106,58 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(cmd) = get_startup_command() {
         if !cmd.contains("--headless") {
             args.headless = true; // Run headless the first time we know startup argument wrong
-            let _ = set_startup(true);
+            let _ = set_startup(true, false);
         }
     }
-
-    // Determine whether to display GUI based on arguments and parent process
-    let display_gui = if args.headless {
-        false
-    } else if args.gui {
-        true
-    } else if let Some(parent) = get_parent_process_name() {
-        parent.to_lowercase().contains("explorer.exe")
-    } else {
-        false
-    };
 
     // Handle startup command
     if let Some(action) = args.startup {
         match action {
+            ToggleAction::Show => {
+                println!("{}", get_i18n().startup_status);
+                let reg_status = if get_startup_command().is_some() {
+                    get_i18n().enabled
+                } else {
+                    get_i18n().disabled
+                };
+                let task_status = if is_task_enabled() {
+                    get_i18n().enabled
+                } else {
+                    get_i18n().disabled
+                };
+
+                println!("{}: {}", get_i18n().registry, reg_status);
+                println!("{}: {}", get_i18n().task_scheduler, task_status);
+                return Ok(());
+            }
+            ToggleAction::Enable | ToggleAction::Disable => {}
+        }
+
+        if !args.user && !is_elevated() {
+            eprintln!("{}", get_i18n().permission_denied);
+            eprintln!("{}", get_i18n().use_user_flag);
+            return Ok(());
+        }
+
+        // Clear both startup settings to avoid confusion, then set the correct one
+
+        match action {
             ToggleAction::Enable => {
-                set_startup(true)?;
+                if get_startup_command().is_some() || is_task_enabled() {
+                    println!("{}", get_i18n().already_set_to_start_on_login);
+                    return Ok(());
+                }
+                set_startup(true, !args.user)?;
                 println!("{}", get_i18n().start_on_login);
             }
             ToggleAction::Disable => {
-                set_startup(false)?;
+                let _ = set_startup(false, false);
+                if is_elevated() {
+                    let _ = set_startup(false, true);
+                }
                 println!("{}", get_i18n().no_longer_start_on_login);
             }
+            ToggleAction::Show => {}
         }
         return Ok(());
     }
@@ -102,7 +165,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Handle status command
     if args.status {
         if let Some(pid) = utils::get_instance_pid() {
-            println!("{}", get_i18n().running_pid.replace("{}", &pid.to_string()));
+            let message = {
+                if utils::is_process_elevated(pid) {
+                    &*format!("({}) ", get_i18n().elevated)
+                } else {
+                    ""
+                }
+            };
+            println!(
+                "{}{}",
+                message,
+                get_i18n().running_pid.replace("{}", &pid.to_string())
+            );
         } else {
             println!("{}", get_i18n().no_running_instance);
         }
@@ -111,21 +185,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Handle stop command
     if args.stop {
-        if send_msg_to_instance(WM_CLOSE) {
-            println!("{}", get_i18n().stop_signal_sent);
-        } else {
-            println!("{}", get_i18n().no_running_instance);
-        }
+        send_msg_to_instance(WM_CLOSE).map(|success| {
+            if success {
+                println!("{}", get_i18n().stop_signal_sent);
+            } else {
+                println!("{}", get_i18n().no_running_instance);
+            }
+        });
         return Ok(());
     }
 
     // Handle reload command
     if args.reload {
-        if send_msg_to_instance(WM_RELOAD_CONFIG) {
-            println!("{}", get_i18n().reload_signal_sent);
-        } else {
-            println!("{}", get_i18n().no_running_instance);
-        }
+        send_msg_to_instance(WM_RELOAD_CONFIG).map(|success| {
+            if success {
+                println!("{}", get_i18n().reload_signal_sent);
+            } else {
+                println!("{}", get_i18n().no_running_instance);
+            }
+        });
         return Ok(());
     }
 
@@ -136,7 +214,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 183 = ERROR_ALREADY_EXISTS
 
             // Summon instance manager window if started from explorer
-            if display_gui && let Some(pid) = utils::get_instance_pid() {
+            if *DISPLAY_GUI && let Some(pid) = utils::get_instance_pid() {
                 window::show_instance_manager_window(pid);
                 return Ok(());
             }
@@ -144,6 +222,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("{}", get_i18n().already_running);
             return Ok(());
         }
+    }
+
+    // Warn if not running with admin privileges
+    if !is_elevated() {
+        println!("{}", get_i18n().admin_privilege_warning);
     }
 
     // Handle demonization after single instance check
@@ -167,8 +250,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     load_config();
 
     // Run hook loop
-    if display_gui && !args.headless {
-        create_alert_window(get_i18n().background_started);
+    if *DISPLAY_GUI {
+        let mut message = get_i18n().background_started.to_string();
+        if !is_elevated() {
+            message = format!("{}\n{}", message, get_i18n().admin_privilege_warning);
+        }
+        create_alert_window(&*message);
     }
     println!("{}", get_i18n().started_monitoring);
 

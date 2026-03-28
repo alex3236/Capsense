@@ -1,9 +1,11 @@
+use crate::i18n::get_i18n;
 use crate::window::create_alert_window;
+use crate::DISPLAY_GUI;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::sync::RwLock;
 
-pub const CONFIG_PATH: &str = "config.toml";
+pub const CONFIG_FILENAME: &str = "config.toml";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
@@ -31,27 +33,36 @@ lazy_static::lazy_static! {
     pub static ref CONFIG: RwLock<Option<Config>> = RwLock::new(None);
 }
 
+pub fn get_config_path() -> std::path::PathBuf {
+    std::env::current_exe()
+        .map(|path| {
+            path.parent()
+                .unwrap_or(std::path::Path::new("."))
+                .join(CONFIG_FILENAME)
+        })
+        .unwrap_or_else(|_| std::path::PathBuf::from(CONFIG_FILENAME))
+}
+
 pub fn load_config() {
-    let config = if let Ok(content) = fs::read_to_string(CONFIG_PATH) {
+    let config_path = get_config_path();
+    let config = if let Ok(content) = fs::read_to_string(&config_path) {
         let config: Config = toml::from_str(&content).unwrap_or_else(|_| Config::default());
 
         // Save back to file to fill in missing default values
         let new_content = toml::to_string(&config).unwrap();
         if content != new_content {
-            let _ = fs::write(CONFIG_PATH, new_content);
+            let _ = fs::write(&config_path, new_content);
         }
         config
     } else {
         let default = Config::default();
-        let _ = fs::write(CONFIG_PATH, toml::to_string(&default).unwrap());
-        create_alert_window(
-            "Capsense is in no-English mode by default, \
-            which prevent your Chinese IME from entering English mode after layout or focus changes.\n\
-            You can change this setting in the configuration file.",
-        );
+        let _ = fs::write(&config_path, toml::to_string(&default).unwrap());
+        if *DISPLAY_GUI {
+            create_alert_window(get_i18n().no_english_tip);
+        }
         default
     };
     let mut global_conf = CONFIG.write().unwrap();
     *global_conf = Some(config);
-    println!("{}", crate::i18n::get_i18n().config_loaded);
+    println!("{}", get_i18n().config_loaded);
 }
