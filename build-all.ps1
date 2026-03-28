@@ -26,7 +26,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-Write-Host "`n✓ Both versions built successfully!" -ForegroundColor Green
+Write-Host "Both versions built successfully!" -ForegroundColor Green
 Write-Host "Output files:" -ForegroundColor Cyan
 Write-Host "  - GUI version: target/release/Capsense.exe" -ForegroundColor Yellow
 Write-Host "  - Headless version: target/release/Capsense-headless.exe" -ForegroundColor Yellow
