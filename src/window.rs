@@ -500,23 +500,21 @@ fn draw_startup_controls(hwnd: HWND, h_instance: isize) {
         );
     }
 
-    if !is_elevated_now {
-        let tip_text = encode_wide(if task_enabled {
-            i18n.permission_denied
-        } else {
-            i18n.registry_limit_tip
-        });
-        create_static(
-            hwnd,
-            h_instance,
-            &tip_text,
-            20,
-            350,
-            260,
-            60,
-            ID_BOTTOM_TIP_LABEL,
-        );
-    }
+    let tip_text = encode_wide(if !is_elevated_now && task_enabled {
+        i18n.permission_denied
+    } else {
+        i18n.registry_limit_tip
+    });
+    create_static(
+        hwnd,
+        h_instance,
+        &tip_text,
+        20,
+        350,
+        260,
+        60,
+        ID_BOTTOM_TIP_LABEL,
+    );
 }
 
 fn create_static(
