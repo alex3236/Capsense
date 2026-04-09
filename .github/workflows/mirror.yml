@@ -1,0 +1,26 @@
+name: Repo sync (GitHub -> Codeberg)
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+jobs:
+  sync-repo-to-forgejo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: "Gather facts"
+        run: |
+          echo "Repo variables:"
+          echo "  PUSH_URL: ${{ vars.CODEBERG_URL }}"
+          echo "  USERNAME: ${{ vars.CODEBERG_USERNAME }}"
+      - name: "Sync repo"
+        uses: spyoungtech/mirror-action@master
+        with:
+          REMOTE: "${{ vars.CODEBERG_URL }}"
+          GIT_USERNAME: ${{ vars.CODEBERG_USERNAME }}
+          GIT_PASSWORD: ${{ secrets.CODEBERG_TOKEN }}
