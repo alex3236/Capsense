@@ -547,7 +547,33 @@ fn set_startup_task(enable: bool) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
 
         if output.status.success() {
-            Ok(())
+            let ps_script = format!(
+                "$task=Get-ScheduledTask -TaskName '{}';$task.Settings.ExecutionTimeLimit='PT0S';Set-ScheduledTask -InputObject $task | Out-Null",
+                task_name
+            );
+            let output = Command::new("powershell")
+                .args([
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-WindowStyle",
+                    "Hidden",
+                    "-Command",
+                    &ps_script,
+                ])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output()
+                .map_err(|e| e.to_string())?;
+
+            if output.status.success() {
+                Ok(())
+            } else {
+                let msg = if !output.stderr.is_empty() {
+                    String::from_utf8_lossy(&output.stderr).to_string()
+                } else {
+                    String::from_utf8_lossy(&output.stdout).to_string()
+                };
+                Err(msg)
+            }
         } else {
             let msg = if !output.stderr.is_empty() {
                 String::from_utf8_lossy(&output.stderr).to_string()
