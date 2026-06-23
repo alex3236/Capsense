@@ -223,7 +223,13 @@ unsafe extern "system" fn low_level_keyboard_proc(
         if !long_fired && elapsed < threshold {
             match config.tap_action.as_str() {
                 "switch_layout" => rotate_layout(&config.layouts, config.no_en),
-                _ => execute_custom_shortcut(&config.tap_shortcut),
+                _ => {
+                    let keys = config.tap_shortcut.clone();
+                    thread::spawn(move || {
+                        thread::sleep(Duration::from_millis(10));
+                        execute_custom_shortcut(&keys);
+                    });
+                }
             }
         }
         return 1;

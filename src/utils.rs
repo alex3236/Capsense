@@ -90,14 +90,17 @@ pub fn is_task_enabled() -> bool {
 // Keyboard and Input
 
 pub(crate) fn execute_custom_shortcut(keys: &[String]) {
+    let mut inputs = Vec::new();
     let vks = parse_shortcut_vks(keys);
 
     for &vk in &vks {
-        send_inputs(&[key_down(vk)]);
+        inputs.push(key_down(vk));
     }
     for &vk in vks.iter().rev() {
-        send_inputs(&[key_up(vk)]);
+        inputs.push(key_up(vk));
     }
+
+    send_inputs(&inputs);
 }
 
 fn parse_shortcut_vks(keys: &[String]) -> Vec<u16> {
