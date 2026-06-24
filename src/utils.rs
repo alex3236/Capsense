@@ -91,7 +91,7 @@ pub fn is_task_enabled() -> bool {
 
 pub(crate) fn execute_custom_shortcut(keys: &[String]) {
     let mut inputs = Vec::new();
-    let vks: Vec<u16> = keys.iter().filter_map(|k| parse_vk(k)).collect();
+    let vks = parse_shortcut_vks(keys);
 
     for &vk in &vks {
         inputs.push(key_down(vk));
@@ -101,6 +101,10 @@ pub(crate) fn execute_custom_shortcut(keys: &[String]) {
     }
 
     send_inputs(&inputs);
+}
+
+fn parse_shortcut_vks(keys: &[String]) -> Vec<u16> {
+    keys.iter().filter_map(|k| parse_vk(k.trim())).collect()
 }
 
 fn parse_vk(key: &str) -> Option<u16> {
@@ -113,6 +117,41 @@ fn parse_vk(key: &str) -> Option<u16> {
         "CAPSLOCK" => Some(VK_CAPITAL),
         s if s.len() == 1 => Some(s.as_bytes()[0] as u16),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_shortcut_vks, parse_vk};
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+        VK_CONTROL, VK_LWIN, VK_MENU, VK_SHIFT, VK_SPACE,
+    };
+
+    #[test]
+    fn parse_vk_supports_modifier_aliases() {
+        assert_eq!(parse_vk("LWIN"), Some(VK_LWIN));
+        assert_eq!(parse_vk("CTRL"), Some(VK_CONTROL));
+        assert_eq!(parse_vk("SHIFT"), Some(VK_SHIFT));
+        assert_eq!(parse_vk("ALT"), Some(VK_MENU));
+        assert_eq!(parse_vk("SPACE"), Some(VK_SPACE));
+    }
+
+    #[test]
+    fn parse_vk_supports_single_character_keys() {
+        assert_eq!(parse_vk("a"), Some(b'A' as u16));
+        assert_eq!(parse_vk("Z"), Some(b'Z' as u16));
+    }
+
+    #[test]
+    fn parse_shortcut_vks_supports_three_or_more_keys() {
+        let keys = vec![
+            " CTRL ".to_string(),
+            "SHIFT".to_string(),
+            "SPACE".to_string(),
+            "A".to_string(),
+        ];
+        let vks = parse_shortcut_vks(&keys);
+        assert_eq!(vks.len(), 4);
     }
 }
 
