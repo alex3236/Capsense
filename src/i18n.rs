@@ -100,7 +100,8 @@ pub const ZH_CN: I18n = I18n {
     elevated: "管理员权限",
     admin_privilege_warning: "Capsense 未以管理员权限运行，可能无法控制以管理员权限运行的应用。",
     permission_denied: "权限不足。请以管理员身份运行。",
-    registry_limit_tip: "从注册表自启动无法控制以管理员权限运行的应用。以管理员身份运行以启用任务计划程序自启动。",
+    registry_limit_tip:
+        "从注册表自启动无法控制以管理员权限运行的应用。以管理员身份运行以启用任务计划程序自启动。",
     use_user_flag: "使用 --user 标志以回退至用户级自启。",
 
     startup_status: "当前自启状态:",
