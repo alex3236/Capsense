@@ -43,7 +43,7 @@ pub const EN_US: I18n = I18n {
     You can change this setting in the configuration file.",
     config_loaded: "Config loaded or reloaded.",
 
-    started_monitoring: "Started. Monitoring CapsLock...",
+    started_monitoring: "Started. Monitoring trigger key...",
     running_pid: "Capsense is running with PID: {}",
     already_running: "Another instance is already running. Use --stop or --reload.",
     no_running_instance: "No running instance found.",
@@ -83,7 +83,7 @@ pub const ZH_CN: I18n = I18n {
     你可以在配置文件中更改此设置。",
     config_loaded: "配置已加载",
 
-    started_monitoring: "已启动。正在监控 CapsLock...",
+    started_monitoring: "已启动。正在监控触发键...",
     running_pid: "Capsense 正以 PID {} 运行",
     already_running: "另一个实例正在运行。请使用 --stop or --reload",
     no_running_instance: "未发现正在运行的实例",

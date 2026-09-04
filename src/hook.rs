@@ -30,7 +30,7 @@ static mut FOCUS_HOOK_HANDLE: HWINEVENTHOOK = 0;
 static mut MOUSE_HOOK_HANDLE: HHOOK = 0;
 static CAPS_IS_DOWN: AtomicBool = AtomicBool::new(false);
 static LONG_ACTION_FIRED: AtomicBool = AtomicBool::new(false);
-static IGNORE_INJECTED_CAPS_EVENTS: AtomicU32 = AtomicU32::new(0);
+static IGNORE_INJECTED_TRIGGER_EVENTS: AtomicU32 = AtomicU32::new(0);
 static PRESS_START: Mutex<Option<Instant>> = Mutex::new(None);
 
 static ACTIVE_PRESS_ID: AtomicU32 = AtomicU32::new(0);
@@ -159,23 +159,24 @@ unsafe extern "system" fn low_level_keyboard_proc(
 
     let kb = unsafe { &*(lparam as *const KBDLLHOOKSTRUCT) };
     let msg = wparam as u32;
-    let is_caps = kb.vkCode == VK_CAPITAL as u32;
+    let config_guard = CONFIG.read().unwrap();
+    let config = config_guard.as_ref().unwrap();
+    let trigger_vk = parse_vk(&config.trigger_key).unwrap_or(VK_CAPITAL);
+    let is_trigger = kb.vkCode == trigger_vk as u32;
     let is_injected = (kb.flags & LLKHF_INJECTED) != 0;
 
-    if !is_caps {
+    if !is_trigger {
         return unsafe { CallNextHookEx(HOOK_HANDLE, code, wparam, lparam) };
     }
 
     if is_injected {
-        let remain = IGNORE_INJECTED_CAPS_EVENTS.load(Ordering::SeqCst);
+        let remain = IGNORE_INJECTED_TRIGGER_EVENTS.load(Ordering::SeqCst);
         if remain > 0 {
-            IGNORE_INJECTED_CAPS_EVENTS.fetch_sub(1, Ordering::SeqCst);
+            IGNORE_INJECTED_TRIGGER_EVENTS.fetch_sub(1, Ordering::SeqCst);
         }
         return unsafe { CallNextHookEx(HOOK_HANDLE, code, wparam, lparam) };
     }
 
-    let config_guard = CONFIG.read().unwrap();
-    let config = config_guard.as_ref().unwrap();
     let threshold = Duration::from_millis(config.tap_threshold_ms);
 
     if msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN {
@@ -200,8 +201,8 @@ unsafe extern "system" fn low_level_keyboard_proc(
             if CAPS_IS_DOWN.load(Ordering::SeqCst)
                 && !LONG_ACTION_FIRED.swap(true, Ordering::SeqCst)
             {
-                IGNORE_INJECTED_CAPS_EVENTS.store(2, Ordering::SeqCst);
-                send_inputs(&[key_down(VK_CAPITAL), key_up(VK_CAPITAL)]);
+                IGNORE_INJECTED_TRIGGER_EVENTS.store(2, Ordering::SeqCst);
+                send_inputs(&[key_down(trigger_vk), key_up(trigger_vk)]);
             }
         });
 
