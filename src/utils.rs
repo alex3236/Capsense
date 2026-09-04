@@ -566,6 +566,14 @@ pub fn set_startup(enable: bool, use_task_scheduler: bool) -> Result<(), String>
     Ok(())
 }
 
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
 fn set_startup_task(enable: bool) -> Result<(), String> {
     let task_name = "CapsenseStartupTask";
 
@@ -575,15 +583,74 @@ fn set_startup_task(enable: bool) -> Result<(), String> {
             .to_str()
             .ok_or_else(|| "Invalid executable path".to_string())?;
 
-        let tr = format!(r#""{}" --headless"#, exe);
+        let task_xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Author>Capsense</Author>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>false</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{exe}</Command>
+      <Arguments>--headless</Arguments>
+    </Exec>
+  </Actions>
+</Task>"#,
+            exe = xml_escape(exe),
+        );
+
+        let temp_file = std::env::temp_dir().join(format!("{task_name}.xml"));
+        let utf16: Vec<u16> = std::iter::once(0xFEFF)
+            .chain(task_xml.encode_utf16())
+            .collect();
+        let bytes = unsafe {
+            std::slice::from_raw_parts(utf16.as_ptr() as *const u8, utf16.len() * 2)
+        };
+        std::fs::write(&temp_file, bytes).map_err(|e| e.to_string())?;
 
         let output = Command::new("schtasks")
             .args([
-                "/Create", "/TN", task_name, "/SC", "ONLOGON", "/RL", "HIGHEST", "/TR", &tr, "/F",
+                "/Create",
+                "/TN",
+                task_name,
+                "/XML",
+                temp_file.to_str().unwrap(),
+                "/F",
             ])
             .creation_flags(CREATE_NO_WINDOW)
             .output()
             .map_err(|e| e.to_string())?;
+
+        let _ = std::fs::remove_file(&temp_file);
 
         if output.status.success() {
             Ok(())
