@@ -16,6 +16,8 @@ pub struct Config {
     pub tap_shortcut: Vec<String>, // ["LWIN", "SPACE"]
     pub layouts: Vec<i32>,
     pub no_en: bool,
+    pub disable_in_fullscreen: bool,
+    pub application_blacklist: Vec<String>,
 }
 
 impl Default for Config {
@@ -27,6 +29,8 @@ impl Default for Config {
             tap_shortcut: vec!["LWIN".to_string(), "SPACE".to_string()],
             layouts: vec![0x0804, 0x0409],
             no_en: true,
+            disable_in_fullscreen: false,
+            application_blacklist: Vec::new(),
         }
     }
 }
