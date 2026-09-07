@@ -77,6 +77,11 @@ On first run, a `config.toml` file will be created in the same directory. You ca
 - `no_en`: When enabled, Capsense prevent your Chinese IMEs from entering English mode after layout or focus changes.
   `true` by default.
   - Idea from [`mbbill/no_english_mode`](https://github.com/mbbill/no_english_mode).
+- `disable_in_fullscreen`: When enabled, Capsense temporarily disables itself for the active fullscreen application.
+  `false` by default.
+- `application_blacklist`: A list of applications where Capsense should be disabled.
+  - Entries are case-insensitive.
+  - You can use executable names like `"valorant.exe"` (or `"valorant"`), or full path suffixes.
 
 ### Arguments
 

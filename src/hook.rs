@@ -6,15 +6,22 @@ use std::time::{Duration, Instant};
 use crate::config::CONFIG;
 use crate::utils::*;
 
-use windows_sys::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, POINT, WPARAM};
+use windows_sys::Win32::Foundation::{CloseHandle, HINSTANCE, LPARAM, LRESULT, POINT, RECT, WPARAM};
+use windows_sys::Win32::Graphics::Gdi::{
+    GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::Threading::{
+    OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+};
 use windows_sys::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_CAPITAL;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, DispatchMessageW, GetForegroundWindow, GetMessageW, SetWindowsHookExW,
-    TranslateMessage, UnhookWindowsHookEx, EVENT_OBJECT_FOCUS, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, LLKHF_INJECTED,
-    MSG, WH_KEYBOARD_LL, WH_MOUSE_LL, WINEVENT_OUTOFCONTEXT, WM_KEYDOWN, WM_KEYUP,
-    WM_LBUTTONUP, WM_MBUTTONUP, WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_USER, WM_XBUTTONUP,
+    CallNextHookEx, DispatchMessageW, GetForegroundWindow, GetMessageW, GetWindowRect,
+    GetWindowThreadProcessId, SetWindowsHookExW, TranslateMessage, UnhookWindowsHookEx,
+    EVENT_OBJECT_FOCUS, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, LLKHF_INJECTED, MSG, WH_KEYBOARD_LL,
+    WH_MOUSE_LL, WINEVENT_OUTOFCONTEXT, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONUP, WM_MBUTTONUP,
+    WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_USER, WM_XBUTTONUP,
 };
 
 // Custom messages
@@ -118,6 +125,10 @@ unsafe extern "system" fn focus_event_proc(
         return;
     }
 
+    if should_disable_for_window(hwnd, config.disable_in_fullscreen, &config.application_blacklist) {
+        return;
+    }
+
     schedule_chinese_ime_mode_sync(hwnd, false);
 }
 
@@ -137,7 +148,16 @@ unsafe extern "system" fn low_level_mouse_proc(
     ) && no_en_enabled()
     {
         let hwnd = unsafe { GetForegroundWindow() };
-        schedule_chinese_ime_mode_sync(hwnd, true);
+        let config_guard = CONFIG.read().unwrap();
+        if let Some(config) = config_guard.as_ref() {
+            if !should_disable_for_window(
+                hwnd,
+                config.disable_in_fullscreen,
+                &config.application_blacklist,
+            ) {
+                schedule_chinese_ime_mode_sync(hwnd, true);
+            }
+        }
     }
 
     unsafe { CallNextHookEx(MOUSE_HOOK_HANDLE, code, wparam, lparam) }
@@ -177,6 +197,16 @@ unsafe extern "system" fn low_level_keyboard_proc(
     let config_guard = CONFIG.read().unwrap();
     let config = config_guard.as_ref().unwrap();
     let threshold = Duration::from_millis(config.tap_threshold_ms);
+    let should_disable =
+        should_disable_for_foreground(config.disable_in_fullscreen, &config.application_blacklist);
+
+    if should_disable
+        && (msg == WM_KEYDOWN
+            || msg == WM_SYSKEYDOWN
+            || (!CAPS_IS_DOWN.load(Ordering::SeqCst) && (msg == WM_KEYUP || msg == WM_SYSKEYUP)))
+    {
+        return unsafe { CallNextHookEx(HOOK_HANDLE, code, wparam, lparam) };
+    }
 
     if msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN {
         if CAPS_IS_DOWN.swap(true, Ordering::SeqCst) {
@@ -236,4 +266,113 @@ unsafe extern "system" fn low_level_keyboard_proc(
     }
 
     unsafe { CallNextHookEx(HOOK_HANDLE, code, wparam, lparam) }
+}
+
+fn should_disable_for_foreground(disable_in_fullscreen: bool, application_blacklist: &[String]) -> bool {
+    let hwnd = unsafe { GetForegroundWindow() };
+    should_disable_for_window(hwnd, disable_in_fullscreen, application_blacklist)
+}
+
+fn should_disable_for_window(
+    hwnd: isize,
+    disable_in_fullscreen: bool,
+    application_blacklist: &[String],
+) -> bool {
+    if hwnd == 0 {
+        return false;
+    }
+
+    (disable_in_fullscreen && is_window_fullscreen(hwnd))
+        || is_window_blacklisted(hwnd, application_blacklist)
+}
+
+fn is_window_fullscreen(hwnd: isize) -> bool {
+    unsafe {
+        let mut window_rect = RECT::default();
+        if GetWindowRect(hwnd, &mut window_rect) == 0 {
+            return false;
+        }
+
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if monitor == 0 {
+            return false;
+        }
+
+        let mut monitor_info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            rcMonitor: RECT::default(),
+            rcWork: RECT::default(),
+            dwFlags: 0,
+        };
+
+        if GetMonitorInfoW(monitor, &mut monitor_info as *mut MONITORINFO as *mut _) == 0 {
+            return false;
+        }
+
+        window_rect.left <= monitor_info.rcMonitor.left
+            && window_rect.top <= monitor_info.rcMonitor.top
+            && window_rect.right >= monitor_info.rcMonitor.right
+            && window_rect.bottom >= monitor_info.rcMonitor.bottom
+    }
+}
+
+fn is_window_blacklisted(hwnd: isize, application_blacklist: &[String]) -> bool {
+    if application_blacklist.is_empty() {
+        return false;
+    }
+
+    let Some((process_name, process_path)) = get_window_process_identity(hwnd) else {
+        return false;
+    };
+
+    application_blacklist
+        .iter()
+        .filter_map(|entry| normalize_blacklist_entry(entry))
+        .any(|entry| {
+            if entry.contains('\\') || entry.contains('/') {
+                process_path.ends_with(&entry)
+            } else {
+                process_name == entry || process_name == format!("{entry}.exe")
+            }
+        })
+}
+
+fn normalize_blacklist_entry(entry: &str) -> Option<String> {
+    let normalized = entry.trim().to_lowercase();
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized)
+    }
+}
+
+fn get_window_process_identity(hwnd: isize) -> Option<(String, String)> {
+    unsafe {
+        let mut pid = 0;
+        if GetWindowThreadProcessId(hwnd, &mut pid) == 0 || pid == 0 {
+            return None;
+        }
+
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if process == 0 {
+            return None;
+        }
+
+        let mut path_buffer = [0u16; 32768];
+        let mut size = path_buffer.len() as u32;
+        let ok = QueryFullProcessImageNameW(process, 0, path_buffer.as_mut_ptr(), &mut size);
+        CloseHandle(process);
+        if ok == 0 || size == 0 {
+            return None;
+        }
+
+        let process_path = String::from_utf16_lossy(&path_buffer[..size as usize]).to_lowercase();
+        let process_name = process_path
+            .rsplit(['\\', '/'])
+            .next()
+            .unwrap_or_default()
+            .to_string();
+
+        Some((process_name, process_path))
+    }
 }

@@ -71,6 +71,10 @@ Capsense 本身不依赖管理员权限。
         - `0x0412`：韩文
 - `no_en`：若启用，Capsense 将防止中文输入法在布局切换或焦点更改后进入英文模式。（默认为 `true`）。
     - 灵感来自 [`mbbill/no_english_mode`](https://github.com/mbbill/no_english_mode)。
+- `disable_in_fullscreen`：启用后，Capsense 会在当前全屏应用激活时临时禁用自身。（默认为 `false`）。
+- `application_blacklist`：需要禁用 Capsense 的应用列表。
+    - 条目不区分大小写。
+    - 可填写可执行文件名（如 `"valorant.exe"` 或 `"valorant"`），也可填写完整路径后缀。
 
 ### 命令行参数
 
