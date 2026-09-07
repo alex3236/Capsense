@@ -6,7 +6,9 @@ use std::time::{Duration, Instant};
 use crate::config::CONFIG;
 use crate::utils::*;
 
-use windows_sys::Win32::Foundation::{CloseHandle, HINSTANCE, LPARAM, LRESULT, POINT, RECT, WPARAM};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, HINSTANCE, LPARAM, LRESULT, POINT, RECT, WPARAM,
+};
 use windows_sys::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
 };
@@ -125,7 +127,11 @@ unsafe extern "system" fn focus_event_proc(
         return;
     }
 
-    if should_disable_for_window(hwnd, config.disable_in_fullscreen, &config.application_blacklist) {
+    if should_disable_for_window(
+        hwnd,
+        config.disable_in_fullscreen,
+        &config.application_blacklist,
+    ) {
         return;
     }
 
@@ -268,7 +274,10 @@ unsafe extern "system" fn low_level_keyboard_proc(
     unsafe { CallNextHookEx(HOOK_HANDLE, code, wparam, lparam) }
 }
 
-fn should_disable_for_foreground(disable_in_fullscreen: bool, application_blacklist: &[String]) -> bool {
+fn should_disable_for_foreground(
+    disable_in_fullscreen: bool,
+    application_blacklist: &[String],
+) -> bool {
     let hwnd = unsafe { GetForegroundWindow() };
     should_disable_for_window(hwnd, disable_in_fullscreen, application_blacklist)
 }
@@ -288,7 +297,12 @@ fn should_disable_for_window(
 
 fn is_window_fullscreen(hwnd: isize) -> bool {
     unsafe {
-        let mut window_rect = RECT::default();
+        let mut window_rect = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
         if GetWindowRect(hwnd, &mut window_rect) == 0 {
             return false;
         }
@@ -300,8 +314,18 @@ fn is_window_fullscreen(hwnd: isize) -> bool {
 
         let mut monitor_info = MONITORINFO {
             cbSize: std::mem::size_of::<MONITORINFO>() as u32,
-            rcMonitor: RECT::default(),
-            rcWork: RECT::default(),
+            rcMonitor: RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+            },
+            rcWork: RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+            },
             dwFlags: 0,
         };
 
