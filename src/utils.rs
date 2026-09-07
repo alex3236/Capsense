@@ -25,7 +25,9 @@ use windows_sys::Win32::UI::Input::Ime::{
 };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     GetKeyboardLayout, SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CAPITAL,
-    VK_CONTROL, VK_LWIN, VK_MENU, VK_SHIFT, VK_SPACE,
+    VK_CONTROL, VK_F1, VK_F10, VK_F11, VK_F12, VK_F13, VK_F14, VK_F15, VK_F16, VK_F17, VK_F18,
+    VK_F19, VK_F2, VK_F20, VK_F21, VK_F22, VK_F23, VK_F24, VK_F3, VK_F4, VK_F5, VK_F6, VK_F7,
+    VK_F8, VK_F9, VK_LWIN, VK_MENU, VK_SHIFT, VK_SPACE,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowW, GetForegroundWindow,
@@ -107,7 +109,7 @@ fn parse_shortcut_vks(keys: &[String]) -> Vec<u16> {
     keys.iter().filter_map(|k| parse_vk(k.trim())).collect()
 }
 
-fn parse_vk(key: &str) -> Option<u16> {
+pub(crate) fn parse_vk(key: &str) -> Option<u16> {
     match key.to_uppercase().as_str() {
         "LWIN" | "WIN" => Some(VK_LWIN),
         "SPACE" => Some(VK_SPACE),
@@ -115,6 +117,30 @@ fn parse_vk(key: &str) -> Option<u16> {
         "LSHIFT" | "SHIFT" => Some(VK_SHIFT),
         "LMENU" | "ALT" => Some(VK_MENU),
         "CAPSLOCK" => Some(VK_CAPITAL),
+        "F1" => Some(VK_F1),
+        "F2" => Some(VK_F2),
+        "F3" => Some(VK_F3),
+        "F4" => Some(VK_F4),
+        "F5" => Some(VK_F5),
+        "F6" => Some(VK_F6),
+        "F7" => Some(VK_F7),
+        "F8" => Some(VK_F8),
+        "F9" => Some(VK_F9),
+        "F10" => Some(VK_F10),
+        "F11" => Some(VK_F11),
+        "F12" => Some(VK_F12),
+        "F13" => Some(VK_F13),
+        "F14" => Some(VK_F14),
+        "F15" => Some(VK_F15),
+        "F16" => Some(VK_F16),
+        "F17" => Some(VK_F17),
+        "F18" => Some(VK_F18),
+        "F19" => Some(VK_F19),
+        "F20" => Some(VK_F20),
+        "F21" => Some(VK_F21),
+        "F22" => Some(VK_F22),
+        "F23" => Some(VK_F23),
+        "F24" => Some(VK_F24),
         s if s.len() == 1 => Some(s.as_bytes()[0] as u16),
         _ => None,
     }
@@ -124,7 +150,7 @@ fn parse_vk(key: &str) -> Option<u16> {
 mod tests {
     use super::{parse_shortcut_vks, parse_vk};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-        VK_CONTROL, VK_LWIN, VK_MENU, VK_SHIFT, VK_SPACE,
+        VK_CONTROL, VK_F13, VK_LWIN, VK_MENU, VK_SHIFT, VK_SPACE,
     };
 
     #[test]
@@ -152,6 +178,11 @@ mod tests {
         ];
         let vks = parse_shortcut_vks(&keys);
         assert_eq!(vks.len(), 4);
+    }
+
+    #[test]
+    fn parse_vk_supports_function_keys() {
+        assert_eq!(parse_vk("F13"), Some(VK_F13));
     }
 }
 

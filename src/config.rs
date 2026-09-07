@@ -10,6 +10,7 @@ pub const CONFIG_FILENAME: &str = "config.toml";
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct Config {
+    pub trigger_key: String,
     pub tap_threshold_ms: u64,
     pub tap_action: String,
     pub tap_shortcut: Vec<String>, // ["LWIN", "SPACE"]
@@ -20,6 +21,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            trigger_key: "CAPSLOCK".to_string(),
             tap_threshold_ms: 300,
             tap_action: "switch_layout".to_string(),
             tap_shortcut: vec!["LWIN".to_string(), "SPACE".to_string()],

@@ -20,14 +20,14 @@ still retaining the ability to use `CapsLock` for its original purpose.
 
 ## Features
 
-- Use a short tap of `CapsLock` to switch input methods.
-- Long press to use CapsLock for its original purpose.
+- Use a short tap of a configurable trigger key (default: `CapsLock`) to switch input methods.
+- Long press to use the trigger key for its original purpose.
 - Runs efficiently in the background with minimal resource usage.
 - Easily change the tap threshold and the shortcut triggered.
 
 ## Usage
 
-Simply run the executable to start monitoring `CapsLock` events.
+Simply run the executable to start monitoring trigger-key events.
 
 Capsense is interactive by default in Explorer but headless in CLI.
 You can override this behavior with the command-line arguments.
@@ -56,7 +56,8 @@ And of course, you can't control elevated Capsense itself from a non-elevated in
 
 On first run, a `config.toml` file will be created in the same directory. You can customize the following:
 
-- `tap_threshold_ms`: The maximum duration (in milliseconds) for a `CapsLock` press to be considered a "tap". `300` ms
+- `trigger_key`: The key to repurpose for tap/long-press behavior. `CAPSLOCK` by default. Example: `F13`.
+- `tap_threshold_ms`: The maximum duration (in milliseconds) for a trigger-key press to be considered a "tap". `300` ms
   by default.
 - `tap_action`: The action to perform on a tap. Supported actions are:
     - `shortcut`: Trigger a keyboard shortcut (defined by `tap_shortcut`).
@@ -68,6 +69,7 @@ On first run, a `config.toml` file will be created in the same directory. You ca
     - `LSHIFT` (or `SHIFT`)
     - `LMENU` (or `ALT`)
     - `CAPSLOCK`
+    - `F1` to `F24`
 - `layouts`: A list of input layout IDs to rotate through when `tap_action` is set to `switch_layout`.
     - Default: `[0x0804, 0x0409]` (`zh-CN` and `en-GB`).
     - See [Microsoft's documentation](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/70feba9f-294e-491e-b6eb-56532684c37f) for more layout IDs. Other common ones are:

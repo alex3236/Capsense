@@ -18,14 +18,14 @@ macOS 通过将常被闲置的 `CapsLock` 键用作输入源切换键以解决�
 
 ## 功能
 
-- 短按 `CapsLock` 来切换输入法。
-- 长按以切换大写锁定。
+- 短按可配置的触发键（默认：`CapsLock`）来切换输入法。
+- 长按触发键可保留其原始功能。
 - 在后台高效运行，占用资源极少。
 - 可轻松更改轻按判定阈值和所触发的操作。
 
 ## 使用方法
 
-直接运行可执行文件，即可开始监控 `CapsLock` 事件。
+直接运行可执行文件，即可开始监控触发键事件。
 
 默认情况下，从文件资源管理器启动时，Capsense 将使用弹窗显示必要的提示信息，
 通过其他方式（例如命令行）启动时则不会弹窗。你可以通过命令行参数来修改这一行为。
@@ -52,7 +52,8 @@ Capsense 本身不依赖管理员权限。
 
 首次运行时，Capsense 会在同一目录下创建 `config.toml` 文件。你可以自定义以下内容：
 
-- `tap_threshold_ms`：超过这个时间的按压将被视为长按。默认为 `300` ms。
+- `trigger_key`：用于轻按/长按逻辑的触发键。默认为 `CAPSLOCK`。例如：`F13`。
+- `tap_threshold_ms`：超过这个时间的触发键按压将被视为长按。默认为 `300` ms。
 - `tap_action`：在轻按时执行的动作。支持的动作为：
     - `shortcut`：触发一个键盘快捷键（由 `tap_shortcut` 定义）。
     - `switch_layout`：（默认）轮换输入布局。
@@ -63,6 +64,7 @@ Capsense 本身不依赖管理员权限。
     - `LSHIFT`（或 `SHIFT`)
     - `LMENU`（或 `ALT`)
     - `CAPSLOCK`
+    - `F1` 到 `F24`
 - `layouts`：当 `tap_action` 设置为 `switch_layout` 时要轮换的一组输入布局 ID。
     - 默认：`[0x0804, 0x0409]`（`zh-CN` 和 `en-GB`）。
     - 有关更多布局 ID，请参见[微软文档](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/70feba9f-294e-491e-b6eb-56532684c37f)。其他常见的有：
